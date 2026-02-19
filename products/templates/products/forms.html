@@ -1,0 +1,44 @@
+{% extends "products/base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+  <h1 style="margin:0 0 6px;">{{ title }}</h1>
+  <div class="muted">Isi data dengan benar lalu klik Save.</div>
+
+  <div style="height:14px;"></div>
+
+  <form method="post">
+    {% csrf_token %}
+
+    <div class="grid">
+      <div class="field">
+        <label>Name</label>
+        {{ form.name }}
+        {{ form.name.errors }}
+      </div>
+
+      <div class="field">
+        <label>Price</label>
+        {{ form.price }}
+        {{ form.price.errors }}
+      </div>
+
+      <div class="field">
+        <label>Stock</label>
+        {{ form.stock }}
+        {{ form.stock.errors }}
+      </div>
+
+      <div class="field">
+        <label>Description</label>
+        {{ form.description }}
+        {{ form.description.errors }}
+      </div>
+    </div>
+
+    <div style="display:flex; gap:10px; margin-top: 8px; flex-wrap:wrap;">
+      <button class="btn btn-primary" type="submit">Save</button>
+      <a class="btn btn-ghost" href="{% url 'product_list' %}">Back</a>
+    </div>
+  </form>
+{% endblock %}
