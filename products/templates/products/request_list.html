@@ -1,0 +1,76 @@
+{% extends "layouts/base.html" %}
+{% block title %}Request Documentation{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h3 class="mb-0">Documentation Requests</h3>
+        <p class="text-muted mb-0 small">Manage photo and video documentation requests</p>
+    </div>
+    <a href="{% url 'doc_request_create' %}" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i> New Request
+    </a>
+</div>
+
+<div class="card card-primary card-outline">
+    <div class="card-header">
+        <h3 class="card-title mb-0">
+            <i class="bi bi-list-ul me-2"></i>All Requests
+            <span class="badge bg-secondary ms-2">{{ requests|length }}</span>
+        </h3>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-striped table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th style="width:60px">#</th>
+                    <th>Brand / Materi</th>
+                    <th>Lokasi</th>
+                    <th>Tanggal</th>
+                    <th>PIC</th>
+                    <th style="width:160px" class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for req in requests %}
+                <tr data-id="{{ req.id }}">
+                    <td class="text-muted">{{ req.id }}</td>
+                    <td>
+                        <div class="fw-semibold">{{ req.brand_materi }}</div>
+                        <div class="text-muted small mt-1">{{ req.email }}</div>
+                    </td>
+                    <td>{{ req.lokasi }}</td>
+                    <td>
+                        <span class="badge text-bg-info">{{ req.tanggal|date:"d M Y" }}</span>
+                    </td>
+                    <td>{{ req.pic_pemohon }}</td>
+                    <td class="text-center">
+                        <a href="{% url 'doc_request_detail' req.id %}" class="btn btn-sm btn-info me-1"
+                            title="View Detail">
+                            <i class="bi bi-eye-fill"></i> View
+                        </a>
+                        <a href="{% url 'doc_request_delete' req.id %}" class="btn btn-sm btn-danger" title="Delete">
+                            <i class="bi bi-trash-fill"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-5">
+                        <i class="bi bi-inbox display-6 d-block mb-2"></i>
+                        No requests yet. <a href="{% url 'doc_request_create' %}">Create one now</a>.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if requests %}
+    <div class="card-footer text-muted small">
+        Showing {{ requests|length }} request{{ requests|length|pluralize }}
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,94 @@
+{% load static %}
+<!-- begin::Sidebar -->
+<aside class="app-sidebar bg-body-secondary shadow" data-bs-theme="dark">
+
+  <!-- begin::Sidebar Brand -->
+  <div class="sidebar-brand">
+    <a href="{% url 'dashboard' %}" class="brand-link d-flex align-items-center px-3 py-2">
+      <img src="{% static 'mingpromo-logo.png' %}" alt="PT Mingpromo"
+        style="height:36px; width:auto; object-fit:contain; max-width:160px;" />
+    </a>
+  </div>
+  <!-- end::Sidebar Brand -->
+
+  <!-- begin::Sidebar Wrapper -->
+  <div class="sidebar-wrapper">
+    <nav class="mt-2">
+      <!-- begin::Sidebar Menu -->
+      <ul class="nav sidebar-menu flex-column" data-lte-toggle="treeview" role="navigation" aria-label="Main navigation"
+        data-accordion="false">
+
+        <!-- Dashboard -->
+        <li class="nav-item">
+          <a href="{% url 'dashboard' %}"
+            class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+            <i class="nav-icon bi bi-speedometer2"></i>
+            <p>Dashboard</p>
+          </a>
+        </li>
+
+        <!-- Products section hidden to focus on Doc Requests -->
+        {% comment %}
+        <li class="nav-header">MASTER DATA</li>
+
+        <li
+          class="nav-item {% if request.resolver_match.url_name in 'product_list,product_create,product_edit,product_delete' %}menu-open{% endif %}">
+          <a href="#"
+            class="nav-link {% if request.resolver_match.url_name in 'product_list,product_create,product_edit,product_delete' %}active{% endif %}">
+            <i class="nav-icon bi bi-box-seam"></i>
+            <p>
+              Products
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview">
+            <li class="nav-item">
+              <a href="{% url 'product_list' %}"
+                class="nav-link {% if request.resolver_match.url_name == 'product_list' %}active{% endif %}">
+                <i class="nav-icon bi bi-list-ul"></i>
+                <p>All Products</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{% url 'product_create' %}"
+                class="nav-link {% if request.resolver_match.url_name == 'product_create' %}active{% endif %}">
+                <i class="nav-icon bi bi-plus-circle"></i>
+                <p>Add Product</p>
+              </a>
+            </li>
+          </ul>
+        </li>
+        {% endcomment %}
+
+        <!-- Documentation Requests -->
+        <li class="nav-header">SERVICES</li>
+
+        <li
+          class="nav-item {% if request.resolver_match.url_name in 'doc_request_list,doc_request_create,doc_request_detail,doc_request_delete' %}menu-open{% endif %}">
+          <a href="#"
+            class="nav-link {% if request.resolver_match.url_name in 'doc_request_list,doc_request_create,doc_request_detail,doc_request_delete' %}active{% endif %}">
+            <i class="nav-icon bi bi-camera-video"></i>
+            <p>
+              Doc Requests
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview">
+            <li class="nav-item">
+              <a href="{% url 'doc_request_list' %}"
+                class="nav-link {% if request.resolver_match.url_name == 'doc_request_list' %}active{% endif %}">
+                <i class="nav-icon bi bi-list-ul"></i>
+                <p>All Requests</p>
+              </a>
+            </li>
+          </ul>
+        </li>
+
+      </ul>
+      <!-- end::Sidebar Menu -->
+    </nav>
+  </div>
+  <!-- end::Sidebar Wrapper -->
+
+</aside>
+<!-- end::Sidebar -->

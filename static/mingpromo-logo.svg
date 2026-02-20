@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 40" width="160" height="40">
+  <!-- Background pill -->
+  <rect x="0" y="0" width="160" height="40" rx="6" fill="transparent"/>
+
+  <!-- M icon mark -->
+  <rect x="2" y="4" width="32" height="32" rx="6" fill="#1a56db"/>
+  <polyline points="7,30 7,10 16,22 25,10 25,30" fill="none" stroke="#ffffff" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- Orange accent dot -->
+  <circle cx="28" cy="10" r="3" fill="#f97316"/>
+
+  <!-- Text: PT -->
+  <text x="42" y="16" font-family="'Segoe UI', Arial, sans-serif" font-size="9" font-weight="600" fill="#6b7280" letter-spacing="1">PT</text>
+
+  <!-- Text: MINGPROMO -->
+  <text x="42" y="30" font-family="'Segoe UI', Arial, sans-serif" font-size="13" font-weight="800" fill="#111827" letter-spacing="0.5">MINGPROMO</text>
+</svg>

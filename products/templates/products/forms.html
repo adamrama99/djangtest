@@ -1,44 +1,97 @@
-{% extends "products/base.html" %}
+{% extends "layouts/base.html" %}
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
-  <h1 style="margin:0 0 6px;">{{ title }}</h1>
-  <div class="muted">Isi data dengan benar lalu klik Save.</div>
 
-  <div style="height:14px;"></div>
+<!-- Page Header -->
+<div class="mb-3">
+  <h3 class="mb-0">{{ title }}</h3>
+  <p class="text-muted mb-0 small">Fill in the details below and click Save.</p>
+</div>
 
-  <form method="post">
-    {% csrf_token %}
-
-    <div class="grid">
-      <div class="field">
-        <label>Name</label>
-        {{ form.name }}
-        {{ form.name.errors }}
+<div class="row">
+  <div class="col-lg-7 col-xl-6">
+    <div class="card card-primary card-outline">
+      <div class="card-header">
+        <h3 class="card-title mb-0">
+          <i class="bi bi-box-seam me-2"></i>Product Details
+        </h3>
       </div>
 
-      <div class="field">
-        <label>Price</label>
-        {{ form.price }}
-        {{ form.price.errors }}
-      </div>
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <div class="card-body">
 
-      <div class="field">
-        <label>Stock</label>
-        {{ form.stock }}
-        {{ form.stock.errors }}
-      </div>
+          <!-- Name -->
+          <div class="mb-3">
+            <label for="{{ form.name.id_for_label }}" class="form-label fw-semibold">
+              Product Name <span class="text-danger">*</span>
+            </label>
+            {{ form.name }}
+            {% if form.name.errors %}
+            <div class="text-danger small mt-1">
+              {% for error in form.name.errors %}{{ error }}{% endfor %}
+            </div>
+            {% endif %}
+          </div>
 
-      <div class="field">
-        <label>Description</label>
-        {{ form.description }}
-        {{ form.description.errors }}
-      </div>
+          <!-- Price & Stock -->
+          <div class="row g-3 mb-3">
+            <div class="col-sm-6">
+              <label for="{{ form.price.id_for_label }}" class="form-label fw-semibold">
+                Price (Rp) <span class="text-danger">*</span>
+              </label>
+              <div class="input-group">
+                <span class="input-group-text">Rp</span>
+                {{ form.price }}
+              </div>
+              {% if form.price.errors %}
+              <div class="text-danger small mt-1">
+                {% for error in form.price.errors %}{{ error }}{% endfor %}
+              </div>
+              {% endif %}
+            </div>
+            <div class="col-sm-6">
+              <label for="{{ form.stock.id_for_label }}" class="form-label fw-semibold">
+                Stock
+              </label>
+              <div class="input-group">
+                {{ form.stock }}
+                <span class="input-group-text">units</span>
+              </div>
+              {% if form.stock.errors %}
+              <div class="text-danger small mt-1">
+                {% for error in form.stock.errors %}{{ error }}{% endfor %}
+              </div>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- Description -->
+          <div class="mb-3">
+            <label for="{{ form.description.id_for_label }}" class="form-label fw-semibold">
+              Description
+            </label>
+            {{ form.description }}
+            {% if form.description.errors %}
+            <div class="text-danger small mt-1">
+              {% for error in form.description.errors %}{{ error }}{% endfor %}
+            </div>
+            {% endif %}
+          </div>
+
+        </div>
+        <div class="card-footer d-flex gap-2">
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-floppy-fill me-1"></i> Save
+          </button>
+          <a href="{% url 'product_list' %}" class="btn btn-secondary">
+            <i class="bi bi-x-lg me-1"></i> Cancel
+          </a>
+        </div>
+      </form>
     </div>
+  </div>
+</div>
 
-    <div style="display:flex; gap:10px; margin-top: 8px; flex-wrap:wrap;">
-      <button class="btn btn-primary" type="submit">Save</button>
-      <a class="btn btn-ghost" href="{% url 'product_list' %}">Back</a>
-    </div>
-  </form>
 {% endblock %}

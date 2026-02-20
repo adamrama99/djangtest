@@ -1,0 +1,76 @@
+{% load static %}
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Dashboard{% endblock %} | My Shop</title>
+
+  <!-- Fonts -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/source-sans-3@5.0.12/index.css"
+    crossorigin="anonymous" />
+
+  <!-- OverlayScrollbars -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.11.0/styles/overlayscrollbars.min.css"
+    crossorigin="anonymous" />
+
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css"
+    crossorigin="anonymous" />
+
+  <!-- AdminLTE 4 CSS -->
+  <link rel="stylesheet" href="{% static 'AdminLTE4/dist/css/adminlte.min.css' %}" />
+
+  {% block extra_css %}{% endblock %}
+</head>
+
+<body class="layout-fixed sidebar-expand-lg sidebar-open bg-body-tertiary">
+  <!--begin::App Wrapper-->
+  <div class="app-wrapper">
+
+    <!--begin::Header-->
+    {% include "layouts/header.html" %}
+    <!--end::Header-->
+
+    <!--begin::Sidebar-->
+    {% include "layouts/sidebar.html" %}
+    <!--end::Sidebar-->
+
+    <!--begin::App Main-->
+    <main class="app-main">
+      <!--begin::App Content-->
+      <div class="app-content">
+        <div class="container-fluid">
+          {% block content %}{% endblock %}
+        </div>
+      </div>
+      <!--end::App Content-->
+    </main>
+    <!--end::App Main-->
+
+    <!--begin::Footer-->
+    <footer class="app-footer">
+      <div class="float-end d-none d-sm-inline">My Shop Admin</div>
+      <strong>Powered by <a href="https://adminlte.io" target="_blank">AdminLTE 4</a></strong>
+    </footer>
+    <!--end::Footer-->
+
+  </div>
+  <!--end::App Wrapper-->
+
+  <!-- OverlayScrollbars JS -->
+  <script src="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.11.0/browser/overlayscrollbars.browser.es5.min.js"
+    crossorigin="anonymous"></script>
+
+  <!-- Bootstrap 5 JS (required by AdminLTE 4) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+    crossorigin="anonymous"></script>
+
+  <!-- AdminLTE 4 JS -->
+  <script src="{% static 'AdminLTE4/dist/js/adminlte.min.js' %}"></script>
+
+  {% block extra_js %}{% endblock %}
+</body>
+
+</html>

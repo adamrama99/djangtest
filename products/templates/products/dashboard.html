@@ -1,0 +1,59 @@
+{% extends "layouts/base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row g-4 mb-4">
+
+  <!-- Stat Card: Total Requests -->
+  <div class="col-sm-6 col-xl-3">
+    <div class="small-box text-bg-info">
+      <div class="inner">
+        <h3>{{ total_requests }}</h3>
+        <p>Doc Requests</p>
+      </div>
+      <svg class="small-box-icon" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true">
+        <path d="M4.5 3.75a3 3 0 00-3 3v.75h21v-.75a3 3 0 00-3-3h-15z" />
+        <path fill-rule="evenodd"
+          d="M22.5 9.75h-21v7.5a3 3 0 003 3h15a3 3 0 003-3v-7.5zm-18 3.75a.75.75 0 01.75-.75h6a.75.75 0 010 1.5h-6a.75.75 0 01-.75-.75zm.75 2.25a.75.75 0 000 1.5h3a.75.75 0 000-1.5h-3z"
+          clip-rule="evenodd" />
+      </svg>
+      <a href="{% url 'doc_request_list' %}"
+        class="small-box-footer link-light link-underline-opacity-0 link-underline-opacity-50-hover">
+        View All <i class="bi bi-link-45deg"></i>
+      </a>
+    </div>
+  </div>
+
+  <!-- Quick Action Card: Add Request -->
+  <div class="col-sm-6 col-xl-3">
+    <div class="small-box text-bg-warning">
+      <div class="inner">
+        <h3 class="text-white"><i class="bi bi-camera-video"></i></h3>
+        <p class="text-white">Request Doc</p>
+      </div>
+      <svg class="small-box-icon text-white" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true">
+        <path fill-rule="evenodd"
+          d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM12.75 9a.75.75 0 00-1.5 0v2.25H9a.75.75 0 000 1.5h2.25V15a.75.75 0 001.5 0v-2.25H15a.75.75 0 000-1.5h-2.25V9z"
+          clip-rule="evenodd" />
+      </svg>
+      <a href="{% url 'doc_request_create' %}"
+        class="small-box-footer link-light link-underline-opacity-0 link-underline-opacity-50-hover text-white">
+        Create New <i class="bi bi-link-45deg"></i>
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<!-- Recent Requests section (placeholder if we want to add one later) -->
+{% if total_requests == 0 %}
+<div class="alert alert-info">
+  <i class="bi bi-info-circle-fill me-2"></i> No documentation requests found. Start by clicking "Request Doc" above.
+</div>
+{% endif %}
+
+
+
+{% endblock %}

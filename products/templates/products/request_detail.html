@@ -1,0 +1,101 @@
+{% extends "layouts/base.html" %}
+{% block title %}Request Detail - {{ request.brand_materi }}{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h3 class="mb-0">Request Detail</h3>
+        <p class="text-muted mb-0 small">Viewing submission details</p>
+    </div>
+    <a href="{% url 'doc_request_list' %}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left me-1"></i> Back to List
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card card-info card-outline">
+            <div class="card-header">
+                <h3 class="card-title mb-0">
+                    <i class="bi bi-file-earmark-text me-2"></i>{{ request.brand_materi }}
+                </h3>
+            </div>
+            <div class="card-body">
+                <table class="table table-bordered">
+                    <tbody>
+                        <tr>
+                            <th style="width: 200px;" class="bg-body-secondary">Email</th>
+                            <td>{{ request.email }}</td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">Brand / Materi</th>
+                            <td>{{ request.brand_materi }}</td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">Lokasi</th>
+                            <td>{{ request.lokasi }}</td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">Jenis LED</th>
+                            <td>{{ request.jenis_led.name|default:"-" }}</td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">Tanggal</th>
+                            <td>{{ request.tanggal|date:"d M Y" }}</td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">Requirements</th>
+                            <td>
+                                {% for req in request.requirements.all %}
+                                <span class="badge text-bg-secondary">{{ req.name }}</span>
+                                {% empty %}
+                                -
+                                {% endfor %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">View Photo</th>
+                            <td>
+                                {% for vp in request.view_photo.all %}
+                                <span class="badge text-bg-secondary">{{ vp.name }}</span>
+                                {% empty %}
+                                -
+                                {% endfor %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">Jenis Kamera</th>
+                            <td>
+                                {% for jk in request.jenis_kamera.all %}
+                                <span class="badge text-bg-secondary">{{ jk.name }}</span>
+                                {% empty %}
+                                -
+                                {% endfor %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">PIC Pemohon</th>
+                            <td>{{ request.pic_pemohon }}</td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">Note</th>
+                            <td>{{ request.note|linebreaks|default:"-" }}</td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">Submitted On</th>
+                            <td>{{ request.created_at|date:"d M Y H:i" }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer text-end">
+                <a href="{% url 'doc_request_delete' request.id %}" class="btn btn-outline-danger">
+                    <i class="bi bi-trash-fill me-1"></i>Delete Request
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
