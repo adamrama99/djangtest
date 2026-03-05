@@ -8,9 +8,9 @@
         <h3 class="mb-0">Documentation Requests</h3>
         <p class="text-muted mb-0 small">Manage photo and video documentation requests</p>
     </div>
-    <a href="{% url 'doc_request_create' %}" class="btn btn-primary">
+    <button type="button" class="btn btn-primary" onclick="loadModal('{% url 'doc_request_create' %}', 'modal-xl')">
         <i class="bi bi-plus-lg me-1"></i> New Request
-    </a>
+    </button>
 </div>
 
 <div class="card card-primary card-outline">
@@ -20,46 +20,89 @@
             <span class="badge bg-secondary ms-2">{{ requests|length }}</span>
         </h3>
     </div>
-    <div class="card-body p-0">
+    <div class="card-body p-0 table-responsive">
         <table class="table table-striped table-hover align-middle mb-0">
             <thead>
                 <tr>
-                    <th style="width:60px">#</th>
+                    <th style="width:50px">#</th>
+                    <th>Submitted</th>
                     <th>Brand / Materi</th>
                     <th>Lokasi</th>
+                    <th>Jenis LED</th>
+                    <th>Requirements</th>
+                    <th>Jenis Kamera</th>
                     <th>Tanggal</th>
                     <th>PIC</th>
-                    <th style="width:160px" class="text-center">Actions</th>
+                    <th>Status</th>
+                    <th style="width:140px" class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for req in requests %}
                 <tr data-id="{{ req.id }}">
                     <td class="text-muted">{{ req.id }}</td>
+                    <td class="text-muted small">{{ req.created_at|date:"d/m/Y H:i" }}</td>
                     <td>
                         <div class="fw-semibold">{{ req.brand_materi }}</div>
-                        <div class="text-muted small mt-1">{{ req.email }}</div>
+                        <div class="text-muted small">{{ req.submitted_by.get_full_name|default:req.submitted_by.username }}</div>
                     </td>
                     <td>{{ req.lokasi }}</td>
+                    <td>
+                        {% if req.jenis_led %}
+                        <span class="badge text-bg-warning">{{ req.jenis_led.name }}</span>
+                        {% else %}-{% endif %}
+                    </td>
+                    <td>
+                        {% for r in req.requirements.all %}
+                        <span class="badge text-bg-secondary">{{ r.name }}</span>
+                        {% empty %}-{% endfor %}
+                    </td>
+                    <td>
+                        {% for k in req.jenis_kamera.all %}
+                        <span class="badge text-bg-primary">{{ k.name }}</span>
+                        {% empty %}-{% endfor %}
+                    </td>
                     <td>
                         <span class="badge text-bg-info">{{ req.tanggal|date:"d M Y" }}</span>
                     </td>
                     <td>{{ req.pic_pemohon }}</td>
-                    <td class="text-center">
-                        <a href="{% url 'doc_request_detail' req.id %}" class="btn btn-sm btn-info me-1"
-                            title="View Detail">
-                            <i class="bi bi-eye-fill"></i> View
-                        </a>
-                        <a href="{% url 'doc_request_delete' req.id %}" class="btn btn-sm btn-danger" title="Delete">
+                    <td>
+                        {% if user.is_superuser or user.groups.all.0.name == "admin" %}
+                        <select class="form-select form-select-sm status-select"
+                                data-url="{% url 'doc_request_update_status' req.id %}"
+                                style="min-width:130px;">
+                            <option value="TODO" {% if req.status == "TODO" %}selected{% endif %}>🔵 To Do</option>
+                            <option value="IN_PROGRESS" {% if req.status == "IN_PROGRESS" %}selected{% endif %}>🟡 On Progress</option>
+                            <option value="DONE" {% if req.status == "DONE" %}selected{% endif %}>🟢 Done</option>
+                        </select>
+                        {% else %}
+                            {% if req.status == "TODO" %}
+                            <span class="badge text-bg-secondary">To Do</span>
+                            {% elif req.status == "IN_PROGRESS" %}
+                            <span class="badge text-bg-warning">On Progress</span>
+                            {% elif req.status == "DONE" %}
+                            <span class="badge text-bg-success">Done</span>
+                            {% endif %}
+                        {% endif %}
+                    </td>
+                    <td class="text-center text-nowrap">
+                        <button type="button" class="btn btn-sm btn-info me-1"
+                                onclick="loadModal('{% url 'doc_request_detail' req.id %}', 'modal-lg')" title="View Detail">
+                            <i class="bi bi-eye-fill"></i>
+                        </button>
+                        {% if user.is_superuser or user.groups.all.0.name == "admin" %}
+                        <button type="button" class="btn btn-sm btn-danger"
+                                onclick="loadModal('{% url 'doc_request_delete' req.id %}')" title="Delete">
                             <i class="bi bi-trash-fill"></i>
-                        </a>
+                        </button>
+                        {% endif %}
                     </td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="6" class="text-center text-muted py-5">
+                    <td colspan="11" class="text-center text-muted py-5">
                         <i class="bi bi-inbox display-6 d-block mb-2"></i>
-                        No requests yet. <a href="{% url 'doc_request_create' %}">Create one now</a>.
+                        No requests yet. <a href="#" onclick="loadModal('{% url 'doc_request_create' %}', 'modal-xl'); return false;">Create one now</a>.
                     </td>
                 </tr>
                 {% endfor %}
@@ -72,5 +115,115 @@
     </div>
     {% endif %}
 </div>
+
+<!-- Reusable Modal Container -->
+<div class="modal fade" id="dynamicModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" id="dynamicModalDialog">
+    <div class="modal-content" id="dynamicModalContent">
+      <!-- Content loaded via AJAX -->
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const modalEl = document.getElementById('dynamicModal');
+  const modalDialog = document.getElementById('dynamicModalDialog');
+  const modalContent = document.getElementById('dynamicModalContent');
+  const bsModal = new bootstrap.Modal(modalEl);
+
+  function loadModal(url, sizeClass) {
+    // Reset and apply size class
+    modalDialog.className = 'modal-dialog modal-dialog-centered modal-dialog-scrollable';
+    if (sizeClass) modalDialog.classList.add(sizeClass);
+
+    modalContent.innerHTML = '<div class="modal-body text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>';
+    bsModal.show();
+
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(r => r.text())
+      .then(html => {
+        modalContent.innerHTML = html;
+        bindModalForm(url);
+      })
+      .catch(() => {
+        modalContent.innerHTML = '<div class="modal-body text-center py-4 text-danger"><i class="bi bi-exclamation-circle fs-1 d-block mb-2"></i>Failed to load content.</div>';
+      });
+  }
+
+  function bindModalForm(actionUrl) {
+    const form = modalContent.querySelector('#modal-form');
+    if (!form) return;
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      const btn = form.querySelector('button[type="submit"]');
+      const origHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
+
+      fetch(actionUrl, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: new FormData(form),
+      })
+        .then(r => {
+          const ct = r.headers.get('content-type') || '';
+          if (ct.includes('application/json')) return r.json().then(d => ({ type: 'json', data: d }));
+          return r.text().then(t => ({ type: 'html', data: t }));
+        })
+        .then(result => {
+          if (result.type === 'json' && result.data.success) {
+            bsModal.hide();
+            location.reload();
+          } else if (result.type === 'html') {
+            // Re-render with validation errors
+            modalContent.innerHTML = result.data;
+            bindModalForm(actionUrl);
+          }
+        })
+        .catch(() => {
+          btn.disabled = false;
+          btn.innerHTML = origHtml;
+        });
+    });
+  }
+
+  // --- Inline Status Change ---
+  document.querySelectorAll('.status-select').forEach(select => {
+    select.addEventListener('change', function () {
+      const url = this.dataset.url;
+      const newStatus = this.value;
+      const el = this;
+      el.disabled = true;
+
+      const formData = new FormData();
+      formData.append('status', newStatus);
+      formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}');
+
+      fetch(url, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: formData,
+      })
+        .then(r => r.json())
+        .then(data => {
+          el.disabled = false;
+          if (data.success) {
+            el.style.outline = '2px solid #198754';
+            setTimeout(() => { el.style.outline = ''; }, 800);
+          }
+        })
+        .catch(() => { el.disabled = false; });
+    });
+  });
+</script>
+
+<!-- Hidden CSRF token for status updates -->
+{% if user.is_superuser or user.groups.all.0.name == "admin" %}
+<form style="display:none">{% csrf_token %}</form>
+{% endif %}
 
 {% endblock %}

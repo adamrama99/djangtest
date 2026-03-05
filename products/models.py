@@ -1,13 +1,8 @@
 from django.db import models
+from django.conf import settings
 
-class Product(models.Model):
-    name = models.CharField(max_length=150)
-    price = models.DecimalField(max_digits=12, decimal_places=2)
-    stock = models.IntegerField(default=0)
-    description = models.TextField(blank=True)
 
-    def __str__(self):
-        return self.name
+
 
 class cameratype(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -34,7 +29,18 @@ class ViewPhoto(models.Model):
         return self.name
 
 class DocumentationRequest(models.Model):
-    email = models.EmailField()
+    STATUS_CHOICES = [
+        ('TODO', 'To Do'),
+        ('IN_PROGRESS', 'On Progress'),
+        ('DONE', 'Done'),
+    ]
+
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="doc_requests",
+        verbose_name="Submitted By",
+    )
     brand_materi = models.CharField("Brand / Materi", max_length=200)
     lokasi = models.CharField("Lokasi", max_length=200)
     jenis_led = models.ForeignKey(LEDType, on_delete=models.SET_NULL, null=True, verbose_name="Jenis LED")
@@ -44,6 +50,7 @@ class DocumentationRequest(models.Model):
     jenis_kamera = models.ManyToManyField(cameratype, verbose_name="Jenis Kamera")
     note = models.TextField(blank=True)
     pic_pemohon = models.CharField("PIC Pemohon", max_length=150)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='TODO')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

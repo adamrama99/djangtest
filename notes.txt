@@ -1,0 +1,13 @@
+========================================
+  AKUN LOGIN - Django Documentation App
+========================================
+
+ADMIN
+  Username : admin
+  Password : admin123
+  Role     : Admin (full access)
+
+STAFF
+  Username : staff
+  Password : staff123
+  Role     : Staff (submit & lihat doc request sendiri)

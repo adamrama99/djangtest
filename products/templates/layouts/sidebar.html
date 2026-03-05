@@ -27,39 +27,7 @@
           </a>
         </li>
 
-        <!-- Products section hidden to focus on Doc Requests -->
-        {% comment %}
-        <li class="nav-header">MASTER DATA</li>
-
-        <li
-          class="nav-item {% if request.resolver_match.url_name in 'product_list,product_create,product_edit,product_delete' %}menu-open{% endif %}">
-          <a href="#"
-            class="nav-link {% if request.resolver_match.url_name in 'product_list,product_create,product_edit,product_delete' %}active{% endif %}">
-            <i class="nav-icon bi bi-box-seam"></i>
-            <p>
-              Products
-              <i class="nav-arrow bi bi-chevron-right"></i>
-            </p>
-          </a>
-          <ul class="nav nav-treeview">
-            <li class="nav-item">
-              <a href="{% url 'product_list' %}"
-                class="nav-link {% if request.resolver_match.url_name == 'product_list' %}active{% endif %}">
-                <i class="nav-icon bi bi-list-ul"></i>
-                <p>All Products</p>
-              </a>
-            </li>
-            <li class="nav-item">
-              <a href="{% url 'product_create' %}"
-                class="nav-link {% if request.resolver_match.url_name == 'product_create' %}active{% endif %}">
-                <i class="nav-icon bi bi-plus-circle"></i>
-                <p>Add Product</p>
-              </a>
-            </li>
-          </ul>
-        </li>
-        {% endcomment %}
-
+        
         <!-- Documentation Requests -->
         <li class="nav-header">SERVICES</li>
 
@@ -83,6 +51,49 @@
             </li>
           </ul>
         </li>
+
+        {% if user.is_superuser or user.groups.all.0.name == "admin" %}
+        <!-- Master Data (Admin Only) -->
+        <li class="nav-header">MASTER DATA</li>
+
+        <li
+          class="nav-item {% if request.resolver_match.url_name in 'master_data_list,master_data_create,master_data_edit,master_data_delete' %}menu-open{% endif %}">
+          <a href="#"
+            class="nav-link {% if request.resolver_match.url_name in 'master_data_list,master_data_create,master_data_edit,master_data_delete' %}active{% endif %}">
+            <i class="nav-icon bi bi-database-gear"></i>
+            <p>
+              Options Data
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview">
+            <li class="nav-item">
+              <a href="{% url 'master_data_list' 'led-type' %}" class="nav-link">
+                <i class="nav-icon bi bi-lightbulb"></i>
+                <p>Jenis LED</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{% url 'master_data_list' 'requirement' %}" class="nav-link">
+                <i class="nav-icon bi bi-check2-square"></i>
+                <p>Requirements</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{% url 'master_data_list' 'view-photo' %}" class="nav-link">
+                <i class="nav-icon bi bi-camera"></i>
+                <p>View Photo</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{% url 'master_data_list' 'camera-type' %}" class="nav-link">
+                <i class="nav-icon bi bi-webcam"></i>
+                <p>Jenis Kamera</p>
+              </a>
+            </li>
+          </ul>
+        </li>
+        {% endif %}
 
       </ul>
       <!-- end::Sidebar Menu -->

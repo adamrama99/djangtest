@@ -1,0 +1,150 @@
+{% extends "layouts/base.html" %}
+{% block title %}{{ config.label }} - Master Data{% endblock %}
+
+{% block content %}
+
+<!-- Page Header -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h3 class="mb-0"><i class="bi {{ config.icon }} me-2"></i>{{ config.label }}</h3>
+    <p class="text-muted mb-0 small">Manage {{ config.label }} master data</p>
+  </div>
+  <button type="button" class="btn btn-primary"
+          onclick="loadModal('{% url 'master_data_create' slug %}')">
+    <i class="bi bi-plus-lg me-1"></i> Add {{ config.label }}
+  </button>
+</div>
+
+<!-- Navigation Pills -->
+<ul class="nav nav-pills mb-3">
+  {% for s, c in registry.items %}
+  <li class="nav-item">
+    <a href="{% url 'master_data_list' s %}"
+       class="nav-link {% if s == slug %}active{% endif %}">
+      <i class="bi {{ c.icon }} me-1"></i> {{ c.label }}
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+
+<!-- Table Card -->
+<div class="card card-primary card-outline">
+  <div class="card-header">
+    <h3 class="card-title mb-0">
+      <i class="bi bi-list-ul me-2"></i>All {{ config.label }}
+      <span class="badge bg-secondary ms-2">{{ items|length }}</span>
+    </h3>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-striped table-hover align-middle mb-0">
+      <thead>
+        <tr>
+          <th style="width:60px">#</th>
+          <th>Name</th>
+          <th style="width:160px" class="text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td class="text-muted">{{ item.id }}</td>
+          <td class="fw-semibold">{{ item.name }}</td>
+          <td class="text-center">
+            <button type="button" class="btn btn-sm btn-warning me-1"
+                    onclick="loadModal('{% url 'master_data_edit' slug item.id %}')" title="Edit">
+              <i class="bi bi-pencil-fill"></i> Edit
+            </button>
+            <button type="button" class="btn btn-sm btn-danger"
+                    onclick="loadModal('{% url 'master_data_delete' slug item.id %}')" title="Delete">
+              <i class="bi bi-trash-fill"></i>
+            </button>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="3" class="text-center text-muted py-5">
+            <i class="bi bi-inbox display-6 d-block mb-2"></i>
+            No {{ config.label }} data yet.
+            <a href="#" onclick="loadModal('{% url 'master_data_create' slug %}'); return false;">Add one now</a>.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if items %}
+  <div class="card-footer text-muted small">
+    Showing {{ items|length }} item{{ items|length|pluralize }}
+  </div>
+  {% endif %}
+</div>
+
+<!-- Modal Container -->
+<div class="modal fade" id="dynamicModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" id="dynamicModalContent">
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const modalEl = document.getElementById('dynamicModal');
+  const modalContent = document.getElementById('dynamicModalContent');
+  const bsModal = new bootstrap.Modal(modalEl);
+
+  function loadModal(url) {
+    modalContent.innerHTML = '<div class="modal-body text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>';
+    bsModal.show();
+
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(r => r.text())
+      .then(html => {
+        modalContent.innerHTML = html;
+        bindModalForm(url);
+      })
+      .catch(() => {
+        modalContent.innerHTML = '<div class="modal-body text-center py-4 text-danger"><i class="bi bi-exclamation-circle fs-1 d-block mb-2"></i>Failed to load content.</div>';
+      });
+  }
+
+  function bindModalForm(actionUrl) {
+    const form = modalContent.querySelector('#modal-form');
+    if (!form) return;
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      const btn = form.querySelector('button[type="submit"]');
+      const origHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
+
+      fetch(actionUrl, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: new FormData(form),
+      })
+        .then(r => {
+          const ct = r.headers.get('content-type') || '';
+          if (ct.includes('application/json')) return r.json().then(d => ({ type: 'json', data: d }));
+          return r.text().then(t => ({ type: 'html', data: t }));
+        })
+        .then(result => {
+          if (result.type === 'json' && result.data.success) {
+            bsModal.hide();
+            location.reload();
+          } else if (result.type === 'html') {
+            modalContent.innerHTML = result.data;
+            bindModalForm(actionUrl);
+          }
+        })
+        .catch(() => {
+          btn.disabled = false;
+          btn.innerHTML = origHtml;
+        });
+    });
+  }
+</script>
+{% endblock %}

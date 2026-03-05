@@ -1,0 +1,30 @@
+<div class="modal-header">
+    <h5 class="modal-title">
+        <i class="bi {{ config.icon }} me-2"></i>{{ title }}
+    </h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<form method="post" id="modal-form" novalidate>
+    {% csrf_token %}
+    <div class="modal-body">
+        <div class="mb-3">
+            <label for="id_name" class="form-label fw-semibold">
+                Name <span class="text-danger">*</span>
+            </label>
+            {{ form.name }}
+            {% if form.name.errors %}
+            <div class="text-danger small mt-1">
+                {% for error in form.name.errors %}{{ error }}{% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <i class="bi bi-x-lg me-1"></i> Cancel
+        </button>
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-floppy-fill me-1"></i> Save
+        </button>
+    </div>
+</form>
