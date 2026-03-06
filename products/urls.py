@@ -9,6 +9,9 @@ urlpatterns = [
     path("requests/<int:pk>/status/", views.doc_request_update_status, name="doc_request_update_status"),
     path("requests/<int:pk>/pelaksana/", views.doc_request_update_pelaksana, name="doc_request_update_pelaksana"),
 
+    # Edit History
+    path("history/", views.edit_history_list, name="edit_history_list"),
+
     # AJAX helper
     path("api/lokasi/create/", views.ajax_create_lokasi, name="ajax_create_lokasi"),
 

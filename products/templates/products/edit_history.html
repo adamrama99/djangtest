@@ -1,0 +1,145 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="mb-1"><i class="bi bi-clock-history me-2"></i>Edit History</h3>
+            <p class="text-muted mb-0">Riwayat perubahan documentation requests</p>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0 align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th style="width:50px">#</th>
+                            <th>Waktu</th>
+                            <th>User</th>
+                            <th>Aksi</th>
+                            <th>Request</th>
+                            <th>Field</th>
+                            <th>Nilai Lama</th>
+                            <th>Nilai Baru</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for h in history %}
+                        <tr>
+                            <td class="text-muted">{{ h.id }}</td>
+                            <td class="text-nowrap small">{{ h.timestamp|date:"d/m/Y H:i:s" }}</td>
+                            <td>
+                                <span class="badge text-bg-primary">
+                                    <i class="bi bi-person-fill me-1"></i>{{ h.user.get_full_name|default:h.user.username }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if h.action == "CREATE" %}
+                                <span class="badge text-bg-success"><i class="bi bi-plus-circle me-1"></i>Created</span>
+                                {% elif h.action == "UPDATE" %}
+                                <span class="badge text-bg-warning"><i class="bi bi-pencil me-1"></i>Updated</span>
+                                {% elif h.action == "DELETE" %}
+                                <span class="badge text-bg-danger"><i class="bi bi-trash me-1"></i>Deleted</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if h.doc_request_id and h.action != "DELETE" %}
+                                <a href="#" onclick="loadModal('{% url 'doc_request_detail' h.doc_request_id %}', 'modal-lg'); return false;"
+                                   class="text-decoration-none">
+                                    {{ h.doc_request_label }}
+                                </a>
+                                {% else %}
+                                <span class="text-muted">{{ h.doc_request_label }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if h.field_name %}
+                                <span class="badge text-bg-info">{{ h.field_name }}</span>
+                                {% else %}-{% endif %}
+                            </td>
+                            <td>
+                                {% if h.old_value %}
+                                <span class="text-danger small">{{ h.old_value }}</span>
+                                {% else %}-{% endif %}
+                            </td>
+                            <td>
+                                {% if h.new_value %}
+                                <span class="text-success small">{{ h.new_value }}</span>
+                                {% else %}-{% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-5">
+                                <i class="bi bi-clock-history display-6 d-block mb-2"></i>
+                                Belum ada riwayat perubahan.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {% if history.has_other_pages %}
+        <div class="card-footer d-flex justify-content-between align-items-center">
+            <span class="text-muted small">
+                Halaman {{ history.number }} dari {{ history.paginator.num_pages }}
+                ({{ history.paginator.count }} total)
+            </span>
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    {% if history.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ history.previous_page_number }}">&laquo; Prev</a>
+                    </li>
+                    {% endif %}
+                    {% for num in history.paginator.page_range %}
+                    {% if history.number == num %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                    {% elif num > history.number|add:"-3" and num < history.number|add:"3" %}
+                    <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
+                    {% endif %}
+                    {% endfor %}
+                    {% if history.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ history.next_page_number }}">Next &raquo;</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% else %}
+        <div class="card-footer text-muted small">
+            Showing {{ history|length }} entr{{ history|length|pluralize:"y,ies" }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal for viewing request detail -->
+<div class="modal fade" id="dynamicModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" id="dynamicModalDialog">
+        <div class="modal-content" id="dynamicModalContent"></div>
+    </div>
+</div>
+
+<script>
+const dynamicModal = document.getElementById('dynamicModal');
+const modalContent = document.getElementById('dynamicModalContent');
+const bsModal = new bootstrap.Modal(dynamicModal);
+
+function loadModal(url, sizeClass) {
+    const dialog = document.getElementById('dynamicModalDialog');
+    dialog.className = 'modal-dialog modal-dialog-centered modal-dialog-scrollable ' + (sizeClass || '');
+    modalContent.innerHTML = '<div class="modal-body text-center py-5"><span class="spinner-border"></span></div>';
+    bsModal.show();
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => r.text())
+        .then(html => { modalContent.innerHTML = html; });
+}
+</script>
+{% endblock %}

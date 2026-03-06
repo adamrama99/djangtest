@@ -2,8 +2,9 @@ from functools import wraps
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponseForbidden
 from django.contrib.auth.decorators import login_required
-from .models import DocumentationRequest, LEDType, Requirement, ViewPhoto, cameratype, BrandMateri, Lokasi, Dokumentator
+from .models import DocumentationRequest, LEDType, Requirement, ViewPhoto, cameratype, BrandMateri, Lokasi, Dokumentator, EditHistory
 from .forms import DocumentationRequestForm, MasterDataForm
+from django.core.paginator import Paginator
 
 
 def _is_ajax(request):
@@ -67,6 +68,11 @@ def doc_request_create(request):
         doc_req.submitted_by = request.user
         doc_req.save()
         form.save_m2m()
+        EditHistory.objects.create(
+            user=request.user, action='CREATE',
+            doc_request_id=doc_req.id, doc_request_label=str(doc_req),
+            field_name='', old_value='', new_value='Request baru dibuat',
+        )
         if _is_ajax(request):
             return JsonResponse({"success": True})
         return redirect("doc_request_list")
@@ -88,6 +94,12 @@ def doc_request_detail(request, pk):
 def doc_request_delete(request, pk):
     doc_request = get_object_or_404(DocumentationRequest, pk=pk)
     if request.method == "POST":
+        label = str(doc_request)
+        EditHistory.objects.create(
+            user=request.user, action='DELETE',
+            doc_request_id=pk, doc_request_label=label,
+            field_name='', old_value=label, new_value='Dihapus',
+        )
         doc_request.delete()
         if _is_ajax(request):
             return JsonResponse({"success": True})
@@ -101,11 +113,18 @@ def doc_request_update_status(request, pk):
     """AJAX-only endpoint to update doc request status."""
     if request.method == "POST":
         doc_request = get_object_or_404(DocumentationRequest, pk=pk)
+        old_status = doc_request.get_status_display()
         new_status = request.POST.get("status", "")
         valid = [c[0] for c in DocumentationRequest.STATUS_CHOICES]
         if new_status in valid:
             doc_request.status = new_status
             doc_request.save(update_fields=["status"])
+            new_label = doc_request.get_status_display()
+            EditHistory.objects.create(
+                user=request.user, action='UPDATE',
+                doc_request_id=pk, doc_request_label=str(doc_request),
+                field_name='Status', old_value=old_status, new_value=new_label,
+            )
             return JsonResponse({"success": True, "status": new_status})
         return JsonResponse({"success": False, "error": "Invalid status"}, status=400)
     return HttpResponseForbidden("POST only.")
@@ -116,8 +135,16 @@ def doc_request_update_pelaksana(request, pk):
     """AJAX-only endpoint to update pelaksana for a doc request."""
     if request.method == "POST":
         doc_request = get_object_or_404(DocumentationRequest, pk=pk)
+        old_names = ', '.join(doc_request.pelaksana.values_list('name', flat=True)) or '-'
         pelaksana_ids = request.POST.getlist("pelaksana[]")
         doc_request.pelaksana.set(pelaksana_ids)
+        new_names = ', '.join(doc_request.pelaksana.values_list('name', flat=True)) or '-'
+        if old_names != new_names:
+            EditHistory.objects.create(
+                user=request.user, action='UPDATE',
+                doc_request_id=pk, doc_request_label=str(doc_request),
+                field_name='Pelaksana', old_value=old_names, new_value=new_names,
+            )
         return JsonResponse({"success": True})
     return HttpResponseForbidden("POST only.")
 
@@ -134,6 +161,16 @@ def ajax_create_lokasi(request):
         obj, created = Lokasi.objects.get_or_create(name=name)
         return JsonResponse({"success": True, "id": obj.id, "name": obj.name})
     return HttpResponseForbidden("POST only.")
+
+# --- Edit History (Admin Only) ---
+
+@admin_required
+def edit_history_list(request):
+    history_qs = EditHistory.objects.select_related("user").all()
+    paginator = Paginator(history_qs, 25)
+    page = request.GET.get("page")
+    history = paginator.get_page(page)
+    return render(request, "products/edit_history.html", {"history": history})
 
 
 # --- Master Data Views (Admin Only) ---

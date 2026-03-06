@@ -73,3 +73,31 @@ class DocumentationRequest(models.Model):
     def __str__(self):
         brand = self.brand_materi.name if self.brand_materi else "N/A"
         return f"{brand} - {self.tanggal}"
+
+
+class EditHistory(models.Model):
+    ACTION_CHOICES = [
+        ('CREATE', 'Created'),
+        ('UPDATE', 'Updated'),
+        ('DELETE', 'Deleted'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="edit_history",
+    )
+    action = models.CharField(max_length=10, choices=ACTION_CHOICES)
+    doc_request_id = models.IntegerField(null=True, blank=True)
+    doc_request_label = models.CharField(max_length=255, blank=True)
+    field_name = models.CharField(max_length=100, blank=True)
+    old_value = models.TextField(blank=True)
+    new_value = models.TextField(blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"{self.user} – {self.get_action_display()} – {self.doc_request_label}"

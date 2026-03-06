@@ -53,6 +53,16 @@
         </li>
 
         {% if user.is_superuser or user.groups.all.0.name == "admin" %}
+        <li class="nav-item">
+          <a href="{% url 'edit_history_list' %}"
+            class="nav-link {% if request.resolver_match.url_name == 'edit_history_list' %}active{% endif %}">
+            <i class="nav-icon bi bi-clock-history"></i>
+            <p>Edit History</p>
+          </a>
+        </li>
+        {% endif %}
+
+        {% if user.is_superuser or user.groups.all.0.name == "admin" %}
         <!-- Master Data (Admin Only) -->
         <li class="nav-header">MASTER DATA</li>
 
