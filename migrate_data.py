@@ -1,4 +1,4 @@
-    """
+"""
 Migrate data from SQLite (db.sqlite3) to PostgreSQL.
 Temporarily connects to SQLite, reads all app data, then writes to PostgreSQL.
 """
