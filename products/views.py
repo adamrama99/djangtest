@@ -2,7 +2,7 @@ from functools import wraps
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponseForbidden
 from django.contrib.auth.decorators import login_required
-from .models import DocumentationRequest, LEDType, Requirement, ViewPhoto, cameratype
+from .models import DocumentationRequest, LEDType, Requirement, ViewPhoto, cameratype, BrandMateri, Lokasi, Dokumentator
 from .forms import DocumentationRequestForm, MasterDataForm
 
 
@@ -44,10 +44,19 @@ def dashboard(request):
 @login_required
 def doc_request_list(request):
     if _is_admin(request.user):
-        requests = DocumentationRequest.objects.all().order_by("-id")
+        requests = DocumentationRequest.objects.select_related(
+            "brand_materi", "lokasi", "jenis_led", "submitted_by"
+        ).prefetch_related("requirements", "view_photo", "jenis_kamera", "pelaksana").all().order_by("-id")
     else:
-        requests = DocumentationRequest.objects.filter(submitted_by=request.user).order_by("-id")
-    return render(request, "products/request_list.html", {"requests": requests})
+        requests = DocumentationRequest.objects.select_related(
+            "brand_materi", "lokasi", "jenis_led", "submitted_by"
+        ).prefetch_related("requirements", "view_photo", "jenis_kamera").filter(
+            submitted_by=request.user
+        ).order_by("-id")
+    return render(request, "products/request_list.html", {
+        "requests": requests,
+        "all_dokumentators": Dokumentator.objects.all().order_by("name"),
+    })
 
 
 @login_required
@@ -102,9 +111,37 @@ def doc_request_update_status(request, pk):
     return HttpResponseForbidden("POST only.")
 
 
+@admin_required
+def doc_request_update_pelaksana(request, pk):
+    """AJAX-only endpoint to update pelaksana for a doc request."""
+    if request.method == "POST":
+        doc_request = get_object_or_404(DocumentationRequest, pk=pk)
+        pelaksana_ids = request.POST.getlist("pelaksana[]")
+        doc_request.pelaksana.set(pelaksana_ids)
+        return JsonResponse({"success": True})
+    return HttpResponseForbidden("POST only.")
+
+
+# --- AJAX endpoint: create Lokasi on-the-fly ---
+
+@login_required
+def ajax_create_lokasi(request):
+    """Allow any logged-in user to create a new Lokasi via AJAX."""
+    if request.method == "POST":
+        name = request.POST.get("name", "").strip()
+        if not name:
+            return JsonResponse({"success": False, "error": "Name is required"}, status=400)
+        obj, created = Lokasi.objects.get_or_create(name=name)
+        return JsonResponse({"success": True, "id": obj.id, "name": obj.name})
+    return HttpResponseForbidden("POST only.")
+
+
 # --- Master Data Views (Admin Only) ---
 
 MASTER_DATA_REGISTRY = {
+    "brand-materi": {"model": BrandMateri, "label": "Brand / Materi", "icon": "bi-tag"},
+    "lokasi": {"model": Lokasi, "label": "Lokasi", "icon": "bi-geo-alt"},
+    "dokumentator": {"model": Dokumentator, "label": "Dokumentator", "icon": "bi-person-video3"},
     "led-type": {"model": LEDType, "label": "Jenis LED", "icon": "bi-lightbulb"},
     "requirement": {"model": Requirement, "label": "Requirement", "icon": "bi-check2-square"},
     "view-photo": {"model": ViewPhoto, "label": "View Photo", "icon": "bi-camera"},

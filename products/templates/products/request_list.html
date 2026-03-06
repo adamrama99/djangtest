@@ -34,6 +34,9 @@
                     <th>Tanggal</th>
                     <th>PIC</th>
                     <th>Status</th>
+                    {% if user.is_superuser or user.groups.all.0.name == "admin" %}
+                    <th>Dokumentator</th>
+                    {% endif %}
                     <th style="width:140px" class="text-center">Actions</th>
                 </tr>
             </thead>
@@ -85,6 +88,17 @@
                             {% endif %}
                         {% endif %}
                     </td>
+                    {% if user.is_superuser or user.groups.all.0.name == "admin" %}
+                    <td>
+                        <select class="pelaksana-select" multiple
+                                data-url="{% url 'doc_request_update_pelaksana' req.id %}"
+                                style="min-width:180px;">
+                            {% for dok in all_dokumentators %}
+                            <option value="{{ dok.id }}" {% if dok in req.pelaksana.all %}selected{% endif %}>{{ dok.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    {% endif %}
                     <td class="text-center text-nowrap">
                         <button type="button" class="btn btn-sm btn-info me-1"
                                 onclick="loadModal('{% url 'doc_request_detail' req.id %}', 'modal-lg')" title="View Detail">
@@ -100,7 +114,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="11" class="text-center text-muted py-5">
+                    <td colspan="12" class="text-center text-muted py-5">
                         <i class="bi bi-inbox display-6 d-block mb-2"></i>
                         No requests yet. <a href="#" onclick="loadModal('{% url 'doc_request_create' %}', 'modal-xl'); return false;">Create one now</a>.
                     </td>
@@ -147,10 +161,71 @@
       .then(html => {
         modalContent.innerHTML = html;
         bindModalForm(url);
+        initSelect2();
       })
       .catch(() => {
         modalContent.innerHTML = '<div class="modal-body text-center py-4 text-danger"><i class="bi bi-exclamation-circle fs-1 d-block mb-2"></i>Failed to load content.</div>';
       });
+  }
+
+  function initSelect2() {
+    const $dropParent = $('#dynamicModal');
+
+    // Brand/Materi (single select)
+    const $brand = $('#id_brand_materi');
+    if ($brand.length) {
+      $brand.select2({
+        theme: 'bootstrap-5',
+        placeholder: 'Pilih Brand / Materi...',
+        allowClear: true,
+        width: '100%',
+        dropdownParent: $dropParent,
+      });
+    }
+
+    // Lokasi (single select with tags)
+    const $lokasi = $('#id_lokasi');
+    if ($lokasi.length) {
+      $lokasi.select2({
+        theme: 'bootstrap-5',
+        placeholder: 'Pilih atau tambah lokasi baru...',
+        allowClear: true,
+        width: '100%',
+        tags: true,
+        dropdownParent: $dropParent,
+        createTag: function(params) {
+          const term = $.trim(params.term);
+          if (term === '') return null;
+          return { id: '_new_' + term, text: term, newTag: true };
+        },
+        templateResult: function(data) {
+          if (data.newTag) {
+            return $('<span><i class="bi bi-plus-circle me-1 text-success"></i>Tambah: <strong>' + data.text + '</strong></span>');
+          }
+          return data.text;
+        },
+      });
+
+      $lokasi.on('select2:select', function(e) {
+        const data = e.params.data;
+        if (data.id && data.id.toString().startsWith('_new_')) {
+          const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+          $.ajax({
+            url: '{% url "ajax_create_lokasi" %}',
+            method: 'POST',
+            data: { name: data.text, csrfmiddlewaretoken: csrfToken },
+            success: function(resp) {
+              if (resp.success) {
+                const select = $lokasi;
+                select.find('option[value="' + data.id + '"]').remove();
+                select.append(new Option(resp.name, resp.id, true, true)).trigger('change');
+              }
+            },
+            error: function() { alert('Gagal menambahkan lokasi baru.'); }
+          });
+        }
+      });
+    }
   }
 
   function bindModalForm(actionUrl) {
@@ -219,9 +294,44 @@
         .catch(() => { el.disabled = false; });
     });
   });
+
+  // --- Inline Pelaksana Select2 ---
+  $('.pelaksana-select').each(function() {
+    const $el = $(this);
+    $el.select2({
+      theme: 'bootstrap-5',
+      placeholder: 'Pilih dokumentator...',
+      allowClear: true,
+      width: '100%',
+      closeOnSelect: false,
+    });
+
+    $el.on('change', function() {
+      const url = $el.data('url');
+      const selected = $el.val() || [];
+      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+      const formData = new FormData();
+      selected.forEach(id => formData.append('pelaksana[]', id));
+      formData.append('csrfmiddlewaretoken', csrfToken);
+
+      fetch(url, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: formData,
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            $el.next('.select2-container').css('outline', '2px solid #198754');
+            setTimeout(() => { $el.next('.select2-container').css('outline', ''); }, 800);
+          }
+        });
+    });
+  });
 </script>
 
-<!-- Hidden CSRF token for status updates -->
+<!-- Hidden CSRF token for inline updates -->
 {% if user.is_superuser or user.groups.all.0.name == "admin" %}
 <form style="display:none">{% csrf_token %}</form>
 {% endif %}

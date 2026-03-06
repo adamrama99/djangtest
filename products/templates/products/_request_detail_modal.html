@@ -52,6 +52,14 @@
                 </td>
             </tr>
             <tr>
+                <th class="bg-body-secondary">Pelaksana</th>
+                <td>
+                    {% for p in request.pelaksana.all %}
+                    <span class="badge text-bg-info">{{ p.name }}</span>
+                    {% empty %}-{% endfor %}
+                </td>
+            </tr>
+            <tr>
                 <th class="bg-body-secondary">PIC Pemohon</th>
                 <td>{{ request.pic_pemohon }}</td>
             </tr>

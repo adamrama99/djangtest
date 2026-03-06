@@ -7,6 +7,10 @@ urlpatterns = [
     path("requests/<int:pk>/", views.doc_request_detail, name="doc_request_detail"),
     path("requests/<int:pk>/delete/", views.doc_request_delete, name="doc_request_delete"),
     path("requests/<int:pk>/status/", views.doc_request_update_status, name="doc_request_update_status"),
+    path("requests/<int:pk>/pelaksana/", views.doc_request_update_pelaksana, name="doc_request_update_pelaksana"),
+
+    # AJAX helper
+    path("api/lokasi/create/", views.ajax_create_lokasi, name="ajax_create_lokasi"),
 
     # Master Data
     path("master/<slug:slug>/", views.master_data_list, name="master_data_list"),

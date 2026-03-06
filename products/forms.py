@@ -1,6 +1,7 @@
 from django import forms
 from .models import DocumentationRequest
 
+
 class DocumentationRequestForm(forms.ModelForm):
     class Meta:
         model = DocumentationRequest
@@ -16,8 +17,8 @@ class DocumentationRequestForm(forms.ModelForm):
             "pic_pemohon",
         ]
         widgets = {
-            "brand_materi": forms.TextInput(attrs={"class": "form-control", "placeholder": "Nama Brand / Materi"}),
-            "lokasi": forms.TextInput(attrs={"class": "form-control", "placeholder": "Lokasi Pemasangan / Shooting"}),
+            "brand_materi": forms.Select(attrs={"class": "form-select select2-field"}),
+            "lokasi": forms.Select(attrs={"class": "form-select select2-field select2-tags"}),
             "jenis_led": forms.RadioSelect(attrs={"class": "form-check-input"}),
             "tanggal": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
             "requirements": forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
