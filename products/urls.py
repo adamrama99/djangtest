@@ -9,6 +9,14 @@ urlpatterns = [
     path("requests/<int:pk>/status/", views.doc_request_update_status, name="doc_request_update_status"),
     path("requests/<int:pk>/pelaksana/", views.doc_request_update_pelaksana, name="doc_request_update_pelaksana"),
 
+    # Maintenance & Troubleshoot LED
+    path("maintenance/", views.maint_request_list, name="maint_request_list"),
+    path("maintenance/create/", views.maint_request_create, name="maint_request_create"),
+    path("maintenance/<int:pk>/", views.maint_request_detail, name="maint_request_detail"),
+    path("maintenance/<int:pk>/delete/", views.maint_request_delete, name="maint_request_delete"),
+    path("maintenance/<int:pk>/status/", views.maint_request_update_status, name="maint_request_update_status"),
+    path("maintenance/<int:pk>/pelaksana/", views.maint_request_update_pelaksana, name="maint_request_update_pelaksana"),
+
     # Edit History
     path("history/", views.edit_history_list, name="edit_history_list"),
 

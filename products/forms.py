@@ -1,5 +1,5 @@
 from django import forms
-from .models import DocumentationRequest
+from .models import DocumentationRequest, MaintenanceRequest, InventoryItem
 
 
 class DocumentationRequestForm(forms.ModelForm):
@@ -27,6 +27,42 @@ class DocumentationRequestForm(forms.ModelForm):
             "note": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Add any special requirements or notes here..."}),
             "pic_pemohon": forms.TextInput(attrs={"class": "form-control", "placeholder": "Nama / Divisi Pemohon"}),
         }
+
+
+class MaintenanceRequestForm(forms.ModelForm):
+    class Meta:
+        model = MaintenanceRequest
+        fields = [
+            "nama_pemohon",
+            "departement",
+            "tanggal_permintaan",
+            "tanggal_deadline",
+            "nama_perangkat",
+            "inventory_items",
+            "deskripsi_pekerjaan",
+            "foto_kerusakan",
+        ]
+        widgets = {
+            "nama_pemohon": forms.TextInput(attrs={"class": "form-control", "placeholder": "Nama lengkap pemohon"}),
+            "departement": forms.TextInput(attrs={"class": "form-control", "placeholder": "Departement pemohon"}),
+            "tanggal_permintaan": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "tanggal_deadline": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "nama_perangkat": forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
+            "inventory_items": forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
+            "deskripsi_pekerjaan": forms.Textarea(attrs={"class": "form-control", "rows": 4, "placeholder": "Jelaskan detail pekerjaan maintenance / troubleshoot..."}),
+            "foto_kerusakan": forms.ClearableFileInput(attrs={"class": "form-control", "accept": "image/*"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['foto_kerusakan'].required = False
+
+    def clean_foto_kerusakan(self):
+        foto = self.cleaned_data.get("foto_kerusakan")
+        if foto and hasattr(foto, 'size'):
+            if foto.size > 10 * 1024 * 1024:  # 10 MB
+                raise forms.ValidationError("Ukuran file maksimal 10 MB.")
+        return foto
 
 
 class MasterDataForm(forms.Form):

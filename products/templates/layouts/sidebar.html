@@ -52,6 +52,28 @@
           </ul>
         </li>
 
+        <!-- Maintenance & Troubleshoot LED -->
+        <li
+          class="nav-item {% if request.resolver_match.url_name in 'maint_request_list,maint_request_create,maint_request_detail,maint_request_delete' %}menu-open{% endif %}">
+          <a href="#"
+            class="nav-link {% if request.resolver_match.url_name in 'maint_request_list,maint_request_create,maint_request_detail,maint_request_delete' %}active{% endif %}">
+            <i class="nav-icon bi bi-tools"></i>
+            <p>
+              Maintenance LED
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview">
+            <li class="nav-item">
+              <a href="{% url 'maint_request_list' %}"
+                class="nav-link {% if request.resolver_match.url_name == 'maint_request_list' %}active{% endif %}">
+                <i class="nav-icon bi bi-list-ul"></i>
+                <p>All Requests</p>
+              </a>
+            </li>
+          </ul>
+        </li>
+
         {% if user.is_superuser or user.groups.all.0.name == "admin" %}
         <li class="nav-item">
           <a href="{% url 'edit_history_list' %}"
@@ -117,6 +139,12 @@
               <a href="{% url 'master_data_list' 'camera-type' %}" class="nav-link">
                 <i class="nav-icon bi bi-webcam"></i>
                 <p>Jenis Kamera</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{% url 'master_data_list' 'nama-perangkat' %}" class="nav-link">
+                <i class="nav-icon bi bi-display"></i>
+                <p>Nama Perangkat</p>
               </a>
             </li>
           </ul>

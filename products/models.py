@@ -101,3 +101,57 @@ class EditHistory(models.Model):
 
     def __str__(self):
         return f"{self.user} – {self.get_action_display()} – {self.doc_request_label}"
+
+
+class NamaPerangkat(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+
+    def __str__(self):
+        return self.name
+
+
+class InventoryItem(models.Model):
+    GROUP_CHOICES = [
+        ('MING', 'Inventory MING'),
+        ('MOBILE_LED', 'Inventory Mobile LED'),
+        ('MST', 'Inventory MST'),
+        ('LUMINOVA', 'Inventory Luminova'),
+    ]
+    name = models.CharField(max_length=150)
+    group = models.CharField(max_length=20, choices=GROUP_CHOICES)
+
+    class Meta:
+        unique_together = ('name', 'group')
+        ordering = ['group', 'name']
+
+    def __str__(self):
+        return f"{self.name} ({self.get_group_display()})"
+
+
+class MaintenanceRequest(models.Model):
+    STATUS_CHOICES = [
+        ('TODO', 'To Do'),
+        ('IN_PROGRESS', 'On Progress'),
+        ('DONE', 'Done'),
+    ]
+
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="maint_requests",
+        verbose_name="Submitted By",
+    )
+    nama_pemohon = models.CharField("Nama Pemohon", max_length=150)
+    departement = models.CharField("Departement", max_length=150)
+    tanggal_permintaan = models.DateField("Tanggal Permintaan")
+    tanggal_deadline = models.DateField("Tanggal Deadline")
+    nama_perangkat = models.ManyToManyField(NamaPerangkat, verbose_name="Nama Perangkat")
+    inventory_items = models.ManyToManyField(InventoryItem, blank=True, verbose_name="Inventory")
+    deskripsi_pekerjaan = models.TextField("Deskripsi Pekerjaan")
+    foto_kerusakan = models.ImageField("Foto Kerusakan", upload_to="maintenance_photos/", blank=True, null=True)
+    pelaksana = models.ManyToManyField('Dokumentator', blank=True, verbose_name="Pelaksana Maintenance")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='TODO')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.nama_pemohon} - {self.tanggal_permintaan}"
