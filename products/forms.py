@@ -18,7 +18,7 @@ class DocumentationRequestForm(forms.ModelForm):
         ]
         widgets = {
             "brand_materi": forms.Select(attrs={"class": "form-select select2-field"}),
-            "lokasi": forms.Select(attrs={"class": "form-select select2-field select2-tags"}),
+            "lokasi": forms.SelectMultiple(attrs={"class": "form-select select2-field select2-tags", "multiple": "multiple"}),
             "jenis_led": forms.RadioSelect(attrs={"class": "form-check-input"}),
             "tanggal": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
             "requirements": forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
@@ -27,6 +27,15 @@ class DocumentationRequestForm(forms.ModelForm):
             "note": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Add any special requirements or notes here..."}),
             "pic_pemohon": forms.TextInput(attrs={"class": "form-control", "placeholder": "Nama / Divisi Pemohon"}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["brand_materi"].queryset = self.fields["brand_materi"].queryset.order_by("name")
+        self.fields["lokasi"].queryset = self.fields["lokasi"].queryset.order_by("name")
+        self.fields["jenis_led"].queryset = self.fields["jenis_led"].queryset.order_by("name")
+        self.fields["requirements"].queryset = self.fields["requirements"].queryset.order_by("name")
+        self.fields["view_photo"].queryset = self.fields["view_photo"].queryset.order_by("name")
+        self.fields["jenis_kamera"].queryset = self.fields["jenis_kamera"].queryset.order_by("name")
 
 
 class MaintenanceRequestForm(forms.ModelForm):

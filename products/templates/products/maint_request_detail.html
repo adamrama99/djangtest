@@ -1,0 +1,130 @@
+{% extends "layouts/base.html" %}
+{% block title %}Maintenance Detail - {{ req.nama_pemohon }}{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h3 class="mb-0">Maintenance Request Detail</h3>
+        <p class="text-muted mb-0 small">Viewing maintenance request details</p>
+    </div>
+    <a href="{% url 'maint_request_list' %}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left me-1"></i> Back to List
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-9 mx-auto">
+        <div class="card card-danger card-outline">
+            <div class="card-header">
+                <h3 class="card-title mb-0">
+                    <i class="bi bi-tools me-2 text-danger"></i>{{ req.nama_pemohon }}
+                </h3>
+            </div>
+            <div class="card-body">
+                <table class="table table-bordered">
+                    <tbody>
+                        <tr>
+                            <th style="width: 220px;" class="bg-body-secondary">Submitted By</th>
+                            <td>{{ req.submitted_by.get_full_name|default:req.submitted_by.username }}</td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">Nama Pemohon</th>
+                            <td>{{ req.nama_pemohon }}</td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">Departement</th>
+                            <td>{{ req.departement }}</td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">Tanggal Permintaan</th>
+                            <td>{{ req.tanggal_permintaan|date:"d M Y" }}</td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">Tanggal Deadline</th>
+                            <td>{{ req.tanggal_deadline|date:"d M Y" }}</td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">Nama Perangkat</th>
+                            <td>
+                                {% for p in req.nama_perangkat.all %}
+                                <span class="badge text-bg-danger">{{ p.name }}</span>
+                                {% empty %}
+                                -
+                                {% endfor %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">Inventory / Lokasi</th>
+                            <td>
+                                {% for group_label, items in inventory_grouped.items %}
+                                <div class="mb-2">
+                                    <div class="fw-semibold text-warning small">{{ group_label }}</div>
+                                    <div>
+                                        {% for item_name in items %}
+                                        <span class="badge text-bg-secondary">{{ item_name }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% empty %}
+                                -
+                                {% endfor %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">Deskripsi Pekerjaan</th>
+                            <td>{{ req.deskripsi_pekerjaan|linebreaks }}</td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">Foto Kerusakan</th>
+                            <td>
+                                {% if req.foto_kerusakan %}
+                                <a href="{{ req.foto_kerusakan.url }}" target="_blank">
+                                    <img src="{{ req.foto_kerusakan.url }}" alt="Foto Kerusakan" class="img-fluid rounded" style="max-height: 320px;">
+                                </a>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">Pelaksana</th>
+                            <td>
+                                {% for p in req.pelaksana.all %}
+                                <span class="badge text-bg-info">{{ p.name }}</span>
+                                {% empty %}
+                                -
+                                {% endfor %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">Status</th>
+                            <td>
+                                {% if req.status == "TODO" %}
+                                <span class="badge text-bg-secondary">To Do</span>
+                                {% elif req.status == "IN_PROGRESS" %}
+                                <span class="badge text-bg-warning">On Progress</span>
+                                {% elif req.status == "DONE" %}
+                                <span class="badge text-bg-success">Done</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">Submitted On</th>
+                            <td>{{ req.created_at|date:"d M Y H:i" }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            {% if user.is_superuser or user.groups.all.0.name == "admin" %}
+            <div class="card-footer text-end">
+                <a href="{% url 'maint_request_delete' req.id %}" class="btn btn-outline-danger">
+                    <i class="bi bi-trash-fill me-1"></i>Delete Request
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% endblock %}

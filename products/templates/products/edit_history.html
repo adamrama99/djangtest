@@ -47,8 +47,7 @@
                             </td>
                             <td>
                                 {% if h.doc_request_id and h.action != "DELETE" %}
-                                <a href="#" onclick="loadModal('{% url 'doc_request_detail' h.doc_request_id %}', 'modal-lg'); return false;"
-                                   class="text-decoration-none">
+                                <a href="{% url 'doc_request_detail' h.doc_request_id %}" class="text-decoration-none">
                                     {{ h.doc_request_label }}
                                 </a>
                                 {% else %}
@@ -120,26 +119,4 @@
     </div>
 </div>
 
-<!-- Modal for viewing request detail -->
-<div class="modal fade" id="dynamicModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" id="dynamicModalDialog">
-        <div class="modal-content" id="dynamicModalContent"></div>
-    </div>
-</div>
-
-<script>
-const dynamicModal = document.getElementById('dynamicModal');
-const modalContent = document.getElementById('dynamicModalContent');
-const bsModal = new bootstrap.Modal(dynamicModal);
-
-function loadModal(url, sizeClass) {
-    const dialog = document.getElementById('dynamicModalDialog');
-    dialog.className = 'modal-dialog modal-dialog-centered modal-dialog-scrollable ' + (sizeClass || '');
-    modalContent.innerHTML = '<div class="modal-body text-center py-5"><span class="spinner-border"></span></div>';
-    bsModal.show();
-    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-        .then(r => r.text())
-        .then(html => { modalContent.innerHTML = html; });
-}
-</script>
 {% endblock %}

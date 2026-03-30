@@ -34,7 +34,7 @@
                         </tr>
                         <tr>
                             <th class="bg-body-secondary">Lokasi</th>
-                            <td>{{ request.lokasi }}</td>
+                            <td>{{ request.lokasi_display }}</td>
                         </tr>
                         <tr>
                             <th class="bg-body-secondary">Jenis LED</th>
@@ -75,6 +75,21 @@
                             </td>
                         </tr>
                         <tr>
+                            <th class="bg-body-secondary">Penugasan Lokasi</th>
+                            <td>
+                                <div class="d-flex flex-column gap-2">
+                                    {% for assignment in request.lokasi_assignments.all %}
+                                    <div class="border rounded p-2">
+                                        <div class="fw-semibold">{{ assignment.lokasi.name }}</div>
+                                        <div class="text-muted small">{{ assignment.pelaksana_display }}</div>
+                                    </div>
+                                    {% empty %}
+                                    -
+                                    {% endfor %}
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
                             <th class="bg-body-secondary">PIC Pemohon</th>
                             <td>{{ request.pic_pemohon }}</td>
                         </tr>
@@ -89,11 +104,13 @@
                     </tbody>
                 </table>
             </div>
+            {% if user.is_superuser or user.groups.all.0.name == "admin" %}
             <div class="card-footer text-end">
                 <a href="{% url 'doc_request_delete' request.id %}" class="btn btn-outline-danger">
                     <i class="bi bi-trash-fill me-1"></i>Delete Request
                 </a>
             </div>
+            {% endif %}
         </div>
     </div>
 </div>

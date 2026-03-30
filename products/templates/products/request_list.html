@@ -8,9 +8,9 @@
         <h3 class="mb-0">Documentation Requests</h3>
         <p class="text-muted mb-0 small">Manage photo and video documentation requests</p>
     </div>
-    <button type="button" class="btn btn-primary" onclick="loadModal('{% url 'doc_request_create' %}', 'modal-xl')">
+    <a href="{% url 'doc_request_create' %}" class="btn btn-primary">
         <i class="bi bi-plus-lg me-1"></i> New Request
-    </button>
+    </a>
 </div>
 
 <div class="card card-primary card-outline">
@@ -35,7 +35,7 @@
                     <th>PIC</th>
                     <th>Status</th>
                     {% if user.is_superuser or user.groups.all.0.name == "admin" %}
-                    <th>Dokumentator</th>
+                    <th>Dokumentator per Lokasi</th>
                     {% endif %}
                     <th style="width:140px" class="text-center">Actions</th>
                 </tr>
@@ -49,7 +49,7 @@
                         <div class="fw-semibold">{{ req.brand_materi }}</div>
                         <div class="text-muted small">{{ req.submitted_by.get_full_name|default:req.submitted_by.username }}</div>
                     </td>
-                    <td>{{ req.lokasi }}</td>
+                    <td>{{ req.lokasi_display }}</td>
                     <td>
                         {% if req.jenis_led %}
                         <span class="badge text-bg-warning">{{ req.jenis_led.name }}</span>
@@ -74,9 +74,9 @@
                         <select class="form-select form-select-sm status-select"
                                 data-url="{% url 'doc_request_update_status' req.id %}"
                                 style="min-width:130px;">
-                            <option value="TODO" {% if req.status == "TODO" %}selected{% endif %}>🔵 To Do</option>
-                            <option value="IN_PROGRESS" {% if req.status == "IN_PROGRESS" %}selected{% endif %}>🟡 On Progress</option>
-                            <option value="DONE" {% if req.status == "DONE" %}selected{% endif %}>🟢 Done</option>
+                            <option value="TODO" {% if req.status == "TODO" %}selected{% endif %}>To Do</option>
+                            <option value="IN_PROGRESS" {% if req.status == "IN_PROGRESS" %}selected{% endif %}>On Progress</option>
+                            <option value="DONE" {% if req.status == "DONE" %}selected{% endif %}>Done</option>
                         </select>
                         {% else %}
                             {% if req.status == "TODO" %}
@@ -89,34 +89,38 @@
                         {% endif %}
                     </td>
                     {% if user.is_superuser or user.groups.all.0.name == "admin" %}
-                    <td>
-                        <select class="pelaksana-select" multiple
-                                data-url="{% url 'doc_request_update_pelaksana' req.id %}"
-                                style="min-width:180px;">
-                            {% for dok in all_dokumentators %}
-                            <option value="{{ dok.id }}" {% if dok in req.pelaksana.all %}selected{% endif %}>{{ dok.name }}</option>
+                    <td style="min-width:260px;">
+                        <div class="d-flex flex-column gap-2">
+                            {% for assignment in req.lokasi_assignments.all %}
+                                <select class="lokasi-pelaksana-select" multiple
+                                        data-url="{% url 'doc_request_update_lokasi_pelaksana' assignment.id %}"
+                                        style="width:100%;">
+                                    {% for dok in all_dokumentators %}
+                                    <option value="{{ dok.id }}" {% if dok in assignment.pelaksana.all %}selected{% endif %}>{{ dok.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            {% empty %}
+                            <span class="text-muted small">Belum ada lokasi.</span>
                             {% endfor %}
-                        </select>
+                        </div>
                     </td>
                     {% endif %}
                     <td class="text-center text-nowrap">
-                        <button type="button" class="btn btn-sm btn-info me-1"
-                                onclick="loadModal('{% url 'doc_request_detail' req.id %}', 'modal-lg')" title="View Detail">
+                        <a href="{% url 'doc_request_detail' req.id %}" class="btn btn-sm btn-info me-1" title="View Detail">
                             <i class="bi bi-eye-fill"></i>
-                        </button>
+                        </a>
                         {% if user.is_superuser or user.groups.all.0.name == "admin" %}
-                        <button type="button" class="btn btn-sm btn-danger"
-                                onclick="loadModal('{% url 'doc_request_delete' req.id %}')" title="Delete">
+                        <a href="{% url 'doc_request_delete' req.id %}" class="btn btn-sm btn-danger" title="Delete">
                             <i class="bi bi-trash-fill"></i>
-                        </button>
+                        </a>
                         {% endif %}
                     </td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="12" class="text-center text-muted py-5">
+                    <td colspan="{% if user.is_superuser or user.groups.all.0.name == 'admin' %}12{% else %}11{% endif %}" class="text-center text-muted py-5">
                         <i class="bi bi-inbox display-6 d-block mb-2"></i>
-                        No requests yet. <a href="#" onclick="loadModal('{% url 'doc_request_create' %}', 'modal-xl'); return false;">Create one now</a>.
+                        No requests yet. <a href="{% url 'doc_request_create' %}">Create one now</a>.
                     </td>
                 </tr>
                 {% endfor %}
@@ -130,143 +134,10 @@
     {% endif %}
 </div>
 
-<!-- Reusable Modal Container -->
-<div class="modal fade" id="dynamicModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" id="dynamicModalDialog">
-    <div class="modal-content" id="dynamicModalContent">
-      <!-- Content loaded via AJAX -->
-    </div>
-  </div>
-</div>
-
 {% endblock %}
 
 {% block extra_js %}
 <script>
-  const modalEl = document.getElementById('dynamicModal');
-  const modalDialog = document.getElementById('dynamicModalDialog');
-  const modalContent = document.getElementById('dynamicModalContent');
-  const bsModal = new bootstrap.Modal(modalEl);
-
-  function loadModal(url, sizeClass) {
-    // Reset and apply size class
-    modalDialog.className = 'modal-dialog modal-dialog-centered modal-dialog-scrollable';
-    if (sizeClass) modalDialog.classList.add(sizeClass);
-
-    modalContent.innerHTML = '<div class="modal-body text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>';
-    bsModal.show();
-
-    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-      .then(r => r.text())
-      .then(html => {
-        modalContent.innerHTML = html;
-        bindModalForm(url);
-        initSelect2();
-      })
-      .catch(() => {
-        modalContent.innerHTML = '<div class="modal-body text-center py-4 text-danger"><i class="bi bi-exclamation-circle fs-1 d-block mb-2"></i>Failed to load content.</div>';
-      });
-  }
-
-  function initSelect2() {
-    const $dropParent = $('#dynamicModal');
-
-    // Brand/Materi (single select)
-    const $brand = $('#id_brand_materi');
-    if ($brand.length) {
-      $brand.select2({
-        theme: 'bootstrap-5',
-        placeholder: 'Pilih Brand / Materi...',
-        allowClear: true,
-        width: '100%',
-        dropdownParent: $dropParent,
-      });
-    }
-
-    // Lokasi (single select with tags)
-    const $lokasi = $('#id_lokasi');
-    if ($lokasi.length) {
-      $lokasi.select2({
-        theme: 'bootstrap-5',
-        placeholder: 'Pilih atau tambah lokasi baru...',
-        allowClear: true,
-        width: '100%',
-        tags: true,
-        dropdownParent: $dropParent,
-        createTag: function(params) {
-          const term = $.trim(params.term);
-          if (term === '') return null;
-          return { id: '_new_' + term, text: term, newTag: true };
-        },
-        templateResult: function(data) {
-          if (data.newTag) {
-            return $('<span><i class="bi bi-plus-circle me-1 text-success"></i>Tambah: <strong>' + data.text + '</strong></span>');
-          }
-          return data.text;
-        },
-      });
-
-      $lokasi.on('select2:select', function(e) {
-        const data = e.params.data;
-        if (data.id && data.id.toString().startsWith('_new_')) {
-          const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-          $.ajax({
-            url: '{% url "ajax_create_lokasi" %}',
-            method: 'POST',
-            data: { name: data.text, csrfmiddlewaretoken: csrfToken },
-            success: function(resp) {
-              if (resp.success) {
-                const select = $lokasi;
-                select.find('option[value="' + data.id + '"]').remove();
-                select.append(new Option(resp.name, resp.id, true, true)).trigger('change');
-              }
-            },
-            error: function() { alert('Gagal menambahkan lokasi baru.'); }
-          });
-        }
-      });
-    }
-  }
-
-  function bindModalForm(actionUrl) {
-    const form = modalContent.querySelector('#modal-form');
-    if (!form) return;
-
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
-      const btn = form.querySelector('button[type="submit"]');
-      const origHtml = btn.innerHTML;
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
-
-      fetch(actionUrl, {
-        method: 'POST',
-        headers: { 'X-Requested-With': 'XMLHttpRequest' },
-        body: new FormData(form),
-      })
-        .then(r => {
-          const ct = r.headers.get('content-type') || '';
-          if (ct.includes('application/json')) return r.json().then(d => ({ type: 'json', data: d }));
-          return r.text().then(t => ({ type: 'html', data: t }));
-        })
-        .then(result => {
-          if (result.type === 'json' && result.data.success) {
-            bsModal.hide();
-            location.reload();
-          } else if (result.type === 'html') {
-            // Re-render with validation errors
-            modalContent.innerHTML = result.data;
-            bindModalForm(actionUrl);
-          }
-        })
-        .catch(() => {
-          btn.disabled = false;
-          btn.innerHTML = origHtml;
-        });
-    });
-  }
-
-  // --- Inline Status Change ---
   document.querySelectorAll('.status-select').forEach(select => {
     select.addEventListener('change', function () {
       const url = this.dataset.url;
@@ -295,8 +166,7 @@
     });
   });
 
-  // --- Inline Pelaksana Select2 ---
-  $('.pelaksana-select').each(function() {
+  $('.lokasi-pelaksana-select').each(function() {
     const $el = $(this);
     $el.select2({
       theme: 'bootstrap-5',
@@ -331,7 +201,6 @@
   });
 </script>
 
-<!-- Hidden CSRF token for inline updates -->
 {% if user.is_superuser or user.groups.all.0.name == "admin" %}
 <form style="display:none">{% csrf_token %}</form>
 {% endif %}

@@ -8,9 +8,9 @@
         <h3 class="mb-0">Maintenance & Troubleshoot LED</h3>
         <p class="text-muted mb-0 small">Manage LED maintenance and troubleshooting requests</p>
     </div>
-    <button type="button" class="btn btn-danger" onclick="loadModal('{% url 'maint_request_create' %}', 'modal-xl')">
+    <a href="{% url 'maint_request_create' %}" class="btn btn-danger">
         <i class="bi bi-plus-lg me-1"></i> New Request
-    </button>
+    </a>
 </div>
 
 <div class="card card-danger card-outline">
@@ -64,9 +64,9 @@
                         <select class="form-select form-select-sm status-select"
                                 data-url="{% url 'maint_request_update_status' req.id %}"
                                 style="min-width:130px;">
-                            <option value="TODO" {% if req.status == "TODO" %}selected{% endif %}>🔵 To Do</option>
-                            <option value="IN_PROGRESS" {% if req.status == "IN_PROGRESS" %}selected{% endif %}>🟡 On Progress</option>
-                            <option value="DONE" {% if req.status == "DONE" %}selected{% endif %}>🟢 Done</option>
+                            <option value="TODO" {% if req.status == "TODO" %}selected{% endif %}>To Do</option>
+                            <option value="IN_PROGRESS" {% if req.status == "IN_PROGRESS" %}selected{% endif %}>On Progress</option>
+                            <option value="DONE" {% if req.status == "DONE" %}selected{% endif %}>Done</option>
                         </select>
                         {% else %}
                             {% if req.status == "TODO" %}
@@ -90,23 +90,21 @@
                     </td>
                     {% endif %}
                     <td class="text-center text-nowrap">
-                        <button type="button" class="btn btn-sm btn-info me-1"
-                                onclick="loadModal('{% url 'maint_request_detail' req.id %}', 'modal-lg')" title="View Detail">
+                        <a href="{% url 'maint_request_detail' req.id %}" class="btn btn-sm btn-info me-1" title="View Detail">
                             <i class="bi bi-eye-fill"></i>
-                        </button>
+                        </a>
                         {% if user.is_superuser or user.groups.all.0.name == "admin" %}
-                        <button type="button" class="btn btn-sm btn-danger"
-                                onclick="loadModal('{% url 'maint_request_delete' req.id %}')" title="Delete">
+                        <a href="{% url 'maint_request_delete' req.id %}" class="btn btn-sm btn-danger" title="Delete">
                             <i class="bi bi-trash-fill"></i>
-                        </button>
+                        </a>
                         {% endif %}
                     </td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="10" class="text-center text-muted py-5">
+                    <td colspan="{% if user.is_superuser or user.groups.all.0.name == 'admin' %}10{% else %}9{% endif %}" class="text-center text-muted py-5">
                         <i class="bi bi-inbox display-6 d-block mb-2"></i>
-                        No maintenance requests yet. <a href="#" onclick="loadModal('{% url 'maint_request_create' %}', 'modal-xl'); return false;">Create one now</a>.
+                        No maintenance requests yet. <a href="{% url 'maint_request_create' %}">Create one now</a>.
                     </td>
                 </tr>
                 {% endfor %}
@@ -120,80 +118,10 @@
     {% endif %}
 </div>
 
-<!-- Reusable Modal Container -->
-<div class="modal fade" id="dynamicModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" id="dynamicModalDialog">
-    <div class="modal-content" id="dynamicModalContent">
-      <!-- Content loaded via AJAX -->
-    </div>
-  </div>
-</div>
-
 {% endblock %}
 
 {% block extra_js %}
 <script>
-  const modalEl = document.getElementById('dynamicModal');
-  const modalDialog = document.getElementById('dynamicModalDialog');
-  const modalContent = document.getElementById('dynamicModalContent');
-  const bsModal = new bootstrap.Modal(modalEl);
-
-  function loadModal(url, sizeClass) {
-    modalDialog.className = 'modal-dialog modal-dialog-centered modal-dialog-scrollable';
-    if (sizeClass) modalDialog.classList.add(sizeClass);
-
-    modalContent.innerHTML = '<div class="modal-body text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>';
-    bsModal.show();
-
-    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-      .then(r => r.text())
-      .then(html => {
-        modalContent.innerHTML = html;
-        bindModalForm(url);
-      })
-      .catch(() => {
-        modalContent.innerHTML = '<div class="modal-body text-center py-4 text-danger"><i class="bi bi-exclamation-circle fs-1 d-block mb-2"></i>Failed to load content.</div>';
-      });
-  }
-
-  function bindModalForm(actionUrl) {
-    const form = modalContent.querySelector('#modal-form');
-    if (!form) return;
-
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
-      const btn = form.querySelector('button[type="submit"]');
-      const origHtml = btn.innerHTML;
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
-
-      fetch(actionUrl, {
-        method: 'POST',
-        headers: { 'X-Requested-With': 'XMLHttpRequest' },
-        body: new FormData(form),
-      })
-        .then(r => {
-          const ct = r.headers.get('content-type') || '';
-          if (ct.includes('application/json')) return r.json().then(d => ({ type: 'json', data: d }));
-          return r.text().then(t => ({ type: 'html', data: t }));
-        })
-        .then(result => {
-          if (result.type === 'json' && result.data.success) {
-            bsModal.hide();
-            location.reload();
-          } else if (result.type === 'html') {
-            modalContent.innerHTML = result.data;
-            bindModalForm(actionUrl);
-          }
-        })
-        .catch(() => {
-          btn.disabled = false;
-          btn.innerHTML = origHtml;
-        });
-    });
-  }
-
-  // --- Inline Status Change ---
   document.querySelectorAll('.status-select').forEach(select => {
     select.addEventListener('change', function () {
       const url = this.dataset.url;
@@ -222,7 +150,6 @@
     });
   });
 
-  // --- Inline Pelaksana Select2 ---
   $('.pelaksana-select').each(function() {
     const $el = $(this);
     $el.select2({
@@ -258,7 +185,6 @@
   });
 </script>
 
-<!-- Hidden CSRF token for inline updates -->
 {% if user.is_superuser or user.groups.all.0.name == "admin" %}
 <form style="display:none">{% csrf_token %}</form>
 {% endif %}

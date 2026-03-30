@@ -7,7 +7,11 @@ urlpatterns = [
     path("requests/<int:pk>/", views.doc_request_detail, name="doc_request_detail"),
     path("requests/<int:pk>/delete/", views.doc_request_delete, name="doc_request_delete"),
     path("requests/<int:pk>/status/", views.doc_request_update_status, name="doc_request_update_status"),
-    path("requests/<int:pk>/pelaksana/", views.doc_request_update_pelaksana, name="doc_request_update_pelaksana"),
+    path(
+        "requests/assignment/<int:assignment_pk>/pelaksana/",
+        views.doc_request_update_lokasi_pelaksana,
+        name="doc_request_update_lokasi_pelaksana",
+    ),
 
     # Maintenance & Troubleshoot LED
     path("maintenance/", views.maint_request_list, name="maint_request_list"),

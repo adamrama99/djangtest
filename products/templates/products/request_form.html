@@ -65,7 +65,7 @@
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="{{ form.tanggal.id_for_label }}" class="form-label fw-bold">
-                                3. Tanggal <span class="text-danger">*</span>
+                                Tanggal <span class="text-danger">*</span>
                             </label>
                             {{ form.tanggal }}
                             {% if form.tanggal.errors %}
@@ -84,9 +84,9 @@
                     </div>
 
                     <div class="row">
-                        <div class="col-md-6 mb-3">
+                        <div class="col-lg-5 mb-3">
                             <label for="{{ form.brand_materi.id_for_label }}" class="form-label fw-bold">
-                                1. Brand / Materi <span class="text-danger">*</span>
+                                Brand / Materi <span class="text-danger">*</span>
                             </label>
                             {{ form.brand_materi }}
                             {% if form.brand_materi.errors %}
@@ -94,11 +94,12 @@
                             {% endif %}
                         </div>
 
-                        <div class="col-md-6 mb-3">
+                        <div class="col-lg-7 mb-3">
                             <label for="{{ form.lokasi.id_for_label }}" class="form-label fw-bold">
-                                2. Lokasi <span class="text-danger">*</span>
+                                Lokasi <span class="text-danger">*</span>
                             </label>
                             {{ form.lokasi }}
+                            <div class="text-muted small mt-1"><i class="bi bi-info-circle me-1"></i>Anda bisa pilih satu atau beberapa lokasi. Sistem akan membuat satu request terpisah untuk setiap lokasi yang dipilih.</div>
                             {% if form.lokasi.errors %}
                             <div class="text-danger small mt-1">{% for error in form.lokasi.errors %}{{ error }}{% endfor %}</div>
                             {% endif %}
@@ -109,7 +110,7 @@
 
                     <!-- Choice Fields with Grid Layout -->
                     <div class="field-container">
-                        <label class="form-label fw-bold mb-2">3. Jenis LED <span class="text-danger">*</span></label>
+                        <label class="form-label fw-bold mb-2">Jenis LED <span class="text-danger">*</span></label>
                         <div class="choice-grid">
                             {% for radio in form.jenis_led %}
                             <div class="form-check">
@@ -126,7 +127,7 @@
                     </div>
 
                     <div class="field-container">
-                        <label class="form-label fw-bold mb-2">5. Requirements <span
+                        <label class="form-label fw-bold mb-2">Requirements <span
                                 class="text-danger">*</span></label>
                         <div class="choice-grid">
                             {% for checkbox in form.requirements %}
@@ -144,7 +145,7 @@
                     </div>
 
                     <div class="field-container">
-                        <label class="form-label fw-bold mb-2">6. View Photo <span class="text-danger">*</span></label>
+                        <label class="form-label fw-bold mb-2">View Photo <span class="text-danger">*</span></label>
                         <div class="choice-grid">
                             {% for checkbox in form.view_photo %}
                             <div class="form-check">
@@ -161,7 +162,7 @@
                     </div>
 
                     <div class="field-container">
-                        <label class="form-label fw-bold mb-2">7. Jenis Kamera <span
+                        <label class="form-label fw-bold mb-2">Jenis Kamera <span
                                 class="text-danger">*</span></label>
                         <div class="choice-grid">
                             {% for checkbox in form.jenis_kamera %}
@@ -181,23 +182,11 @@
                     <hr class="my-4 opacity-25">
 
                     <div class="mb-3">
-                        <label for="{{ form.note.id_for_label }}" class="form-label fw-bold">8. Note</label>
+                        <label for="{{ form.note.id_for_label }}" class="form-label fw-bold">Note</label>
                         {{ form.note }}
                         {% if form.note.errors %}
                         <div class="text-danger small mt-1">{% for error in form.note.errors %}{{ error }}{% endfor %}
                         </div>
-                        {% endif %}
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="{{ form.pic_pemohon.id_for_label }}" class="form-label fw-bold">
-                            9. PIC Pemohon <span class="text-danger">*</span>
-                        </label>
-                        <p class="text-muted small mb-2">Tambahkan nama divisi atau PIC sebagai pihak yang mengajukan
-                            request.</p>
-                        {{ form.pic_pemohon }}
-                        {% if form.pic_pemohon.errors %}
-                        <div class="text-danger small mt-1">{% for error in form.pic_pemohon.errors %}{{ error }}{% endfor %}</div>
                         {% endif %}
                     </div>
 
@@ -216,4 +205,66 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function initRequestFormSelect2() {
+    const $brand = $('#id_brand_materi');
+    if ($brand.length) {
+      $brand.select2({
+        theme: 'bootstrap-5',
+        placeholder: 'Pilih Brand / Materi...',
+        allowClear: true,
+        width: '100%',
+      });
+    }
+
+    const $lokasi = $('#id_lokasi');
+    if ($lokasi.length) {
+      $lokasi.select2({
+        theme: 'bootstrap-5',
+        placeholder: 'Pilih satu atau beberapa lokasi...',
+        allowClear: true,
+        width: '100%',
+        tags: true,
+        closeOnSelect: false,
+        createTag: function(params) {
+          const term = $.trim(params.term);
+          if (term === '') return null;
+          return { id: '_new_' + term, text: term, newTag: true };
+        },
+        templateResult: function(data) {
+          if (data.newTag) {
+            return $('<span><i class="bi bi-plus-circle me-1 text-success"></i>Tambah: <strong>' + data.text + '</strong></span>');
+          }
+          return data.text;
+        },
+      });
+
+      $lokasi.on('select2:select', function(e) {
+        const data = e.params.data;
+        if (data.id && data.id.toString().startsWith('_new_')) {
+          const csrfToken = document.querySelector('form [name=csrfmiddlewaretoken]')?.value;
+          $.ajax({
+            url: '{% url "ajax_create_lokasi" %}',
+            method: 'POST',
+            data: { name: data.text, csrfmiddlewaretoken: csrfToken },
+            success: function(resp) {
+              if (resp.success) {
+                $lokasi.find('option[value="' + data.id + '"]').remove();
+                $lokasi.append(new Option(resp.name, resp.id, true, true)).trigger('change');
+              }
+            },
+            error: function() {
+              alert('Gagal menambahkan lokasi baru.');
+            }
+          });
+        }
+      });
+    }
+  }
+
+  $(initRequestFormSelect2);
+</script>
 {% endblock %}
