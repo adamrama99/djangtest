@@ -3,13 +3,25 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponseForbidden
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
+from django.template.loader import render_to_string
+from django.utils import timezone
 from .models import (
     DocumentationRequest, LEDType, Requirement, ViewPhoto, cameratype,
     BrandMateri, Lokasi, Dokumentator, DocumentationRequestLokasiAssignment, EditHistory,
     MaintenanceRequest, NamaPerangkat, InventoryItem,
     JadwalTayang, JadwalTayangFotoTayang, JadwalTayangBuktiPlaylist, JadwalTayangFotoTakeout,
+    TakeoutAlertRule,
 )
-from .forms import DocumentationRequestForm, MasterDataForm, MaintenanceRequestForm, JadwalTayangForm, UserForm
+from .forms import (
+    DocumentationRequestForm,
+    MasterDataForm,
+    MaintenanceRequestForm,
+    JadwalTayangForm,
+    JadwalTayangEditForm,
+    TakeoutAlertRuleForm,
+    UserForm,
+)
+from .notifications import get_active_takeout_notifications
 from django.core.paginator import Paginator
 from django.contrib.auth import get_user_model
 
@@ -68,6 +80,35 @@ def _joined_names(queryset, empty_label="Belum ditentukan"):
     return ", ".join(names) if names else empty_label
 
 
+def _get_or_create_dokumentator_for_user(user):
+    candidate_names = []
+    full_name = user.get_full_name().strip()
+    if full_name:
+        candidate_names.append(full_name)
+    if user.username:
+        candidate_names.append(user.username.strip())
+
+    seen = set()
+    unique_names = []
+    for name in candidate_names:
+        normalized = name.lower()
+        if name and normalized not in seen:
+            seen.add(normalized)
+            unique_names.append(name)
+
+    for name in unique_names:
+        dokumentator = Dokumentator.objects.filter(name__iexact=name).first()
+        if dokumentator:
+            return dokumentator, False
+
+    primary_name = unique_names[0] if unique_names else ""
+    if not primary_name:
+        return None, False
+
+    dokumentator, created = Dokumentator.objects.get_or_create(name=primary_name)
+    return dokumentator, created
+
+
 def _create_edit_history(
     *,
     user,
@@ -89,6 +130,38 @@ def _create_edit_history(
         old_value=old_value,
         new_value=new_value,
     )
+
+
+def _format_datetime_for_history(value):
+    if not value:
+        return "-"
+    return timezone.localtime(value).strftime("%d/%m/%Y %H:%M")
+
+
+def _jadwal_tayang_edit_snapshot(jadwal_tayang):
+    return {
+        "Brand / Materi": jadwal_tayang.brand_materi.name if jadwal_tayang.brand_materi else "-",
+        "Lokasi": jadwal_tayang.lokasi_display(),
+        "Jenis Produk": jadwal_tayang.jenis_led.name if jadwal_tayang.jenis_led else "-",
+        "Tanggal Tayang": _format_datetime_for_history(jadwal_tayang.tanggal_tayang),
+        "Tanggal Takeout": _format_datetime_for_history(jadwal_tayang.tanggal_takeout),
+        "PIC Pemohon": jadwal_tayang.pic_pemohon or "-",
+        "Notes Requester": jadwal_tayang.note_requester or "-",
+    }
+
+
+def _serialize_notification_for_json(notification):
+    return {
+        "key": notification["key"],
+        "title": notification["title"],
+        "message": notification["message"],
+        "detail_url": notification["detail_url"],
+        "urgency": notification["urgency"],
+        "urgency_label": notification["urgency_label"],
+        "takeout_at_display": notification["takeout_at_display"],
+        "offset_display": notification["offset_display"],
+        "time_status": notification["time_status"],
+    }
 
 
 def _forbidden_response(request, message="Anda tidak memiliki izin untuk mengakses halaman ini."):
@@ -138,11 +211,12 @@ def dashboard(request):
     if _is_admin(request.user):
         doc_qs = DocumentationRequest.objects.all()
         maint_qs = MaintenanceRequest.objects.all()
-        jt_qs = JadwalTayang.objects.all()
     else:
         doc_qs = DocumentationRequest.objects.filter(submitted_by=request.user)
         maint_qs = MaintenanceRequest.objects.filter(submitted_by=request.user)
-        jt_qs = JadwalTayang.objects.filter(submitted_by=request.user)
+
+    # Jadwal tayang dapat dilihat oleh semua user yang login.
+    jt_qs = JadwalTayang.objects.all()
 
     total_requests = doc_qs.count()
     total_maint = maint_qs.count()
@@ -382,6 +456,95 @@ def edit_history_list(request):
     return render(request, "products/edit_history.html", {"history": history})
 
 
+@login_required
+def notification_list(request):
+    notifications = get_active_takeout_notifications()
+    paginator = Paginator(notifications, 20)
+    page = request.GET.get("page")
+    notification_page = paginator.get_page(page)
+    urgent_count = sum(1 for notification in notifications if notification["urgency"] == TakeoutAlertRule.Urgency.URGENT)
+    warning_count = len(notifications) - urgent_count
+    return render(
+        request,
+        "products/notification_list.html",
+        {
+            "notifications": notification_page,
+            "notification_total": len(notifications),
+            "urgent_count": urgent_count,
+            "warning_count": warning_count,
+        },
+    )
+
+
+@login_required
+def notification_summary(request):
+    notifications = get_active_takeout_notifications()
+    preview_notifications = notifications[:5]
+    html = render_to_string(
+        "products/_notification_dropdown_items.html",
+        {
+            "notifications": preview_notifications,
+            "notification_total": len(notifications),
+        },
+        request=request,
+    )
+    urgent_notifications = [
+        _serialize_notification_for_json(notification)
+        for notification in notifications
+        if notification["urgency"] == TakeoutAlertRule.Urgency.URGENT
+    ]
+    return JsonResponse(
+        {
+            "count": len(notifications),
+            "urgent_count": len(urgent_notifications),
+            "html": html,
+            "urgent_notifications": urgent_notifications,
+        }
+    )
+
+
+@admin_required
+def takeout_alert_rule_list(request):
+    rules = TakeoutAlertRule.objects.all()
+    return render(request, "products/takeout_alert_rule_list.html", {"rules": rules})
+
+
+@admin_required
+def takeout_alert_rule_create(request):
+    form = TakeoutAlertRuleForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        if _is_ajax(request):
+            return JsonResponse({"success": True})
+        return redirect("takeout_alert_rule_list")
+    template = "products/_takeout_alert_rule_form_modal.html"
+    return render(request, template, {"form": form, "title": "Tambah Aturan Notifikasi"})
+
+
+@admin_required
+def takeout_alert_rule_edit(request, pk):
+    rule = get_object_or_404(TakeoutAlertRule, pk=pk)
+    form = TakeoutAlertRuleForm(request.POST or None, instance=rule)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        if _is_ajax(request):
+            return JsonResponse({"success": True})
+        return redirect("takeout_alert_rule_list")
+    template = "products/_takeout_alert_rule_form_modal.html"
+    return render(request, template, {"form": form, "title": f"Edit Aturan: {rule.name}", "rule": rule})
+
+
+@admin_required
+def takeout_alert_rule_delete(request, pk):
+    rule = get_object_or_404(TakeoutAlertRule, pk=pk)
+    if request.method == "POST":
+        rule.delete()
+        if _is_ajax(request):
+            return JsonResponse({"success": True})
+        return redirect("takeout_alert_rule_list")
+    return render(request, "products/_takeout_alert_rule_delete_modal.html", {"rule": rule})
+
+
 # --- Master Data Views (Admin Only) ---
 
 MASTER_DATA_REGISTRY = {
@@ -564,16 +727,9 @@ def maint_request_update_pelaksana(request, pk):
 
 @login_required
 def jadwal_tayang_list(request):
-    if _is_admin(request.user) or _is_executor(request.user):
-        qs = JadwalTayang.objects.select_related(
-            "brand_materi", "jenis_led", "submitted_by"
-        ).prefetch_related("lokasi", "pelaksana").all()
-    else:
-        qs = JadwalTayang.objects.select_related(
-            "brand_materi", "jenis_led", "submitted_by"
-        ).prefetch_related("lokasi", "pelaksana").filter(
-            submitted_by=request.user
-        )
+    qs = JadwalTayang.objects.select_related(
+        "brand_materi", "jenis_led", "submitted_by"
+    ).prefetch_related("lokasi", "pelaksana").all()
     return render(request, "products/jadwal_tayang_list.html", {
         "requests": qs,
         "all_dokumentators": Dokumentator.objects.all().order_by("name"),
@@ -615,6 +771,44 @@ def jadwal_tayang_create(request):
     })
 
 
+@admin_required
+def jadwal_tayang_edit(request, pk):
+    jt = get_object_or_404(
+        JadwalTayang.objects.select_related("brand_materi", "jenis_led").prefetch_related("lokasi"),
+        pk=pk,
+    )
+    form = JadwalTayangEditForm(request.POST or None, instance=jt)
+    old_values = _jadwal_tayang_edit_snapshot(jt) if request.method == "POST" else None
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            jt = form.save(commit=False)
+            jt.save()
+            jt.lokasi.set([form.cleaned_data["lokasi"]])
+            jt.refresh_from_db()
+            new_values = _jadwal_tayang_edit_snapshot(jt)
+            label = _jadwal_tayang_label(jt)
+            for field_name, old_value in old_values.items():
+                new_value = new_values[field_name]
+                if old_value != new_value:
+                    _create_edit_history(
+                        user=request.user,
+                        action="UPDATE",
+                        request_type=EditHistory.RequestType.JADWAL_TAYANG,
+                        object_id=jt.id,
+                        label=label,
+                        field_name=field_name,
+                        old_value=old_value,
+                        new_value=new_value,
+                    )
+        return redirect("jadwal_tayang_detail", pk=jt.pk)
+    return render(request, "products/jadwal_tayang_form.html", {
+        "form": form,
+        "title": "Edit Jadwal Tayang",
+        "is_edit": True,
+        "jadwal_tayang": jt,
+    })
+
+
 @login_required
 def jadwal_tayang_detail(request, pk):
     jt = get_object_or_404(
@@ -626,8 +820,6 @@ def jadwal_tayang_detail(request, pk):
         ),
         pk=pk,
     )
-    if not _is_admin(request.user) and not _is_executor(request.user) and jt.submitted_by != request.user:
-        return HttpResponseForbidden("Access denied.")
 
     # Get bukti playlist if exists
     try:
@@ -734,8 +926,25 @@ def jadwal_tayang_upload_photos(request, pk):
         label = _jadwal_tayang_label(jt)
         old_status = jt.get_status_display()
         old_note_executor = jt.note_executor
+        old_pelaksana = _joined_names(jt.pelaksana)
         initial_foto_tayang_count = jt.foto_tayang_set.count()
         initial_foto_takeout_count = jt.foto_takeout_set.count()
+
+        uploader_dokumentator, _ = _get_or_create_dokumentator_for_user(request.user)
+        if uploader_dokumentator:
+            jt.pelaksana.add(uploader_dokumentator)
+            new_pelaksana = _joined_names(jt.pelaksana)
+            if old_pelaksana != new_pelaksana:
+                _create_edit_history(
+                    user=request.user,
+                    action="UPDATE",
+                    request_type=EditHistory.RequestType.JADWAL_TAYANG,
+                    object_id=pk,
+                    label=label,
+                    field_name="Pelaksana",
+                    old_value=old_pelaksana,
+                    new_value=new_pelaksana,
+                )
 
         # Save executor notes
         note_executor = request.POST.get("note_executor", "").strip()

@@ -349,6 +349,43 @@ class JadwalTayangFotoTakeout(models.Model):
         return f"Foto Takeout #{self.pk} - {self.jadwal_tayang}"
 
 
+class TakeoutAlertRule(models.Model):
+    class OffsetUnit(models.TextChoices):
+        DAY = "DAY", "Hari"
+        HOUR = "HOUR", "Jam"
+
+    class Urgency(models.TextChoices):
+        WARNING = "WARNING", "Warning"
+        URGENT = "URGENT", "Urgent"
+
+    name = models.CharField(max_length=150, unique=True)
+    offset_unit = models.CharField(max_length=10, choices=OffsetUnit.choices)
+    offset_value = models.PositiveIntegerField()
+    lead_minutes = models.PositiveIntegerField(default=0, editable=False)
+    urgency = models.CharField(max_length=10, choices=Urgency.choices)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-is_active", "-lead_minutes", "urgency", "name"]
+        verbose_name = "Takeout Alert Rule"
+        verbose_name_plural = "Takeout Alert Rules"
+
+    def __str__(self):
+        return f"{self.name} ({self.offset_display()} - {self.get_urgency_display()})"
+
+    def save(self, *args, **kwargs):
+        multiplier = 1440 if self.offset_unit == self.OffsetUnit.DAY else 60
+        self.lead_minutes = self.offset_value * multiplier
+        super().save(*args, **kwargs)
+
+    def offset_display(self):
+        if self.offset_unit == self.OffsetUnit.DAY:
+            return f"H-{self.offset_value}"
+        return f"Jam-{self.offset_value}"
+
+
 @receiver(m2m_changed, sender=DocumentationRequest.lokasi.through)
 def sync_doc_request_lokasi_assignments(sender, instance, action, reverse, **kwargs):
     if reverse or not instance.pk:

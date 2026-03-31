@@ -38,7 +38,7 @@
                     {% if is_admin %}
                     <th>Pelaksana</th>
                     {% endif %}
-                    <th style="width:140px" class="text-center">Actions</th>
+                    <th style="width:180px" class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -84,6 +84,9 @@
                             <i class="bi bi-eye-fill"></i>
                         </a>
                         {% if is_admin %}
+                        <a href="{% url 'jadwal_tayang_edit' req.id %}" class="btn btn-sm btn-warning me-1" title="Edit">
+                            <i class="bi bi-pencil-fill"></i>
+                        </a>
                         <a href="{% url 'jadwal_tayang_delete' req.id %}" class="btn btn-sm btn-danger" title="Delete">
                             <i class="bi bi-trash-fill"></i>
                         </a>

@@ -1,7 +1,14 @@
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from .models import DocumentationRequest, MaintenanceRequest, InventoryItem, JadwalTayang
+from .models import (
+    DocumentationRequest,
+    MaintenanceRequest,
+    InventoryItem,
+    JadwalTayang,
+    Lokasi,
+    TakeoutAlertRule,
+)
 
 User = get_user_model()
 
@@ -116,6 +123,52 @@ class JadwalTayangForm(forms.ModelForm):
         self.fields["brand_materi"].queryset = self.fields["brand_materi"].queryset.order_by("name")
         self.fields["lokasi"].queryset = self.fields["lokasi"].queryset.order_by("name")
         self.fields["jenis_led"].queryset = self.fields["jenis_led"].queryset.order_by("name")
+        for field_name in ("tanggal_tayang", "tanggal_takeout"):
+            self.fields[field_name].input_formats = ["%Y-%m-%dT%H:%M"]
+            self.fields[field_name].widget.format = "%Y-%m-%dT%H:%M"
+
+
+class JadwalTayangEditForm(JadwalTayangForm):
+    lokasi = forms.ModelChoiceField(
+        queryset=Lokasi.objects.none(),
+        widget=forms.Select(attrs={"class": "form-select select2-field"}),
+        label="Lokasi",
+    )
+
+    class Meta(JadwalTayangForm.Meta):
+        pass
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["lokasi"].queryset = Lokasi.objects.order_by("name")
+        if self.instance and self.instance.pk:
+            self.initial["lokasi"] = self.instance.lokasi.order_by("name").first()
+
+
+class TakeoutAlertRuleForm(forms.ModelForm):
+    class Meta:
+        model = TakeoutAlertRule
+        fields = ["name", "offset_unit", "offset_value", "urgency", "is_active"]
+        widgets = {
+            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Contoh: H-1 Warning"}),
+            "offset_unit": forms.Select(attrs={"class": "form-select"}),
+            "offset_value": forms.NumberInput(attrs={"class": "form-control", "min": 1}),
+            "urgency": forms.Select(attrs={"class": "form-select"}),
+            "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["name"].help_text = "Nama aturan untuk memudahkan identifikasi."
+        self.fields["offset_unit"].help_text = "Pilih apakah trigger dihitung dalam hari atau jam sebelum takeout."
+        self.fields["offset_value"].help_text = "Isi 1 untuk H-1, atau 6 untuk Jam-6."
+        self.fields["urgency"].help_text = "Urgent akan muncul di bell dan popup berulang."
+
+    def clean_offset_value(self):
+        value = self.cleaned_data["offset_value"]
+        if value < 1:
+            raise forms.ValidationError("Nilai offset minimal 1.")
+        return value
 
 
 class UserForm(forms.ModelForm):

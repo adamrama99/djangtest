@@ -16,9 +16,11 @@ from .models import (
     Dokumentator,
     EditHistory,
     JadwalTayang,
+    JadwalTayangFotoTakeout,
     LEDType,
     Lokasi,
     Requirement,
+    TakeoutAlertRule,
     ViewPhoto,
     cameratype,
 )
@@ -193,12 +195,21 @@ class JadwalTayangHistoryTests(TestCase):
             email="admin_jt@example.com",
             password="password123",
         )
+        cls.admin.first_name = "Admin"
+        cls.admin.last_name = "JT"
+        cls.admin.save(update_fields=["first_name", "last_name"])
         cls.brand = BrandMateri.objects.create(name="Brand JT")
+        cls.brand_b = BrandMateri.objects.create(name="Brand JT B")
         cls.lokasi_a = Lokasi.objects.create(name="Lokasi JT A")
         cls.lokasi_b = Lokasi.objects.create(name="Lokasi JT B")
         cls.led_type = LEDType.objects.create(name="Outdoor JT")
+        cls.led_type_b = LEDType.objects.create(name="Indoor JT")
         cls.dokumentator_a = Dokumentator.objects.create(name="Dokumentator JT A")
         cls.dokumentator_b = Dokumentator.objects.create(name="Dokumentator JT B")
+        cls.staff = get_user_model().objects.create_user(
+            username="staff_jt",
+            password="password123",
+        )
 
     def _datetime_input(self, value):
         return timezone.localtime(value).strftime("%Y-%m-%dT%H:%M")
@@ -314,12 +325,18 @@ class JadwalTayangHistoryTests(TestCase):
             doc_request_id=jadwal_tayang.pk,
         )
         field_names = set(history_entries.values_list("field_name", flat=True))
+        jadwal_tayang.refresh_from_db()
         status_history = history_entries.get(field_name="Status")
 
         self.assertRedirects(response, reverse("jadwal_tayang_detail", args=[jadwal_tayang.pk]))
         self.assertSetEqual(
             field_names,
-            {"Notes Executor", "Foto Tayang", "Bukti Playlist", "Foto Takeout", "Status"},
+            {"Pelaksana", "Notes Executor", "Foto Tayang", "Bukti Playlist", "Foto Takeout", "Status"},
+        )
+        self.assertQuerySetEqual(
+            jadwal_tayang.pelaksana.order_by("name").values_list("name", flat=True),
+            ["Admin JT"],
+            transform=lambda value: value,
         )
         self.assertEqual(status_history.old_value, "Belum Tayang")
         self.assertEqual(status_history.new_value, "Sudah Takeout")
@@ -339,3 +356,236 @@ class JadwalTayangHistoryTests(TestCase):
         self.assertFalse(JadwalTayang.objects.filter(pk=jadwal_tayang.pk).exists())
         self.assertEqual(history_entry.doc_request_id, jadwal_tayang.pk)
         self.assertEqual(history_entry.new_value, "Dihapus")
+
+    def test_admin_can_edit_jadwal_tayang_and_logs_history(self):
+        jadwal_tayang = self.create_jadwal_tayang()
+        self.client.force_login(self.admin)
+        new_start_at = timezone.now() + timedelta(days=1)
+
+        response = self.client.post(
+            reverse("jadwal_tayang_edit", args=[jadwal_tayang.pk]),
+            data={
+                "brand_materi": str(self.brand_b.id),
+                "lokasi": str(self.lokasi_b.id),
+                "jenis_led": str(self.led_type_b.id),
+                "tanggal_tayang": self._datetime_input(new_start_at),
+                "tanggal_takeout": self._datetime_input(new_start_at + timedelta(hours=8)),
+                "note_requester": "Catatan requester baru",
+                "pic_pemohon": "Sales",
+            },
+        )
+
+        jadwal_tayang.refresh_from_db()
+        history_entries = EditHistory.objects.filter(
+            request_type=EditHistory.RequestType.JADWAL_TAYANG,
+            doc_request_id=jadwal_tayang.pk,
+            action="UPDATE",
+        )
+        field_names = set(history_entries.values_list("field_name", flat=True))
+
+        self.assertRedirects(response, reverse("jadwal_tayang_detail", args=[jadwal_tayang.pk]))
+        self.assertEqual(jadwal_tayang.brand_materi, self.brand_b)
+        self.assertEqual(jadwal_tayang.jenis_led, self.led_type_b)
+        self.assertEqual(jadwal_tayang.lokasi_display(), "Lokasi JT B")
+        self.assertEqual(jadwal_tayang.pic_pemohon, "Sales")
+        self.assertEqual(jadwal_tayang.note_requester, "Catatan requester baru")
+        self.assertSetEqual(
+            field_names,
+            {
+                "Brand / Materi",
+                "Lokasi",
+                "Jenis Produk",
+                "Tanggal Tayang",
+                "Tanggal Takeout",
+                "PIC Pemohon",
+                "Notes Requester",
+            },
+        )
+
+    def test_non_admin_cannot_access_edit_jadwal_tayang(self):
+        jadwal_tayang = self.create_jadwal_tayang()
+        self.client.force_login(self.staff)
+
+        response = self.client.get(reverse("jadwal_tayang_edit", args=[jadwal_tayang.pk]))
+
+        self.assertEqual(response.status_code, 403)
+
+
+@override_settings(ALLOWED_HOSTS=["testserver", "localhost"])
+class JadwalTayangVisibilityTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = get_user_model().objects.create_user(
+            username="owner_jt",
+            password="password123",
+        )
+        cls.viewer = get_user_model().objects.create_user(
+            username="viewer_jt",
+            password="password123",
+        )
+        cls.brand = BrandMateri.objects.create(name="Brand Visibility")
+        cls.lokasi = Lokasi.objects.create(name="Lokasi Visibility")
+        cls.led_type = LEDType.objects.create(name="LED Visibility")
+
+    def create_jadwal_tayang(self):
+        start_at = timezone.now()
+        jadwal_tayang = JadwalTayang.objects.create(
+            submitted_by=self.owner,
+            brand_materi=self.brand,
+            jenis_led=self.led_type,
+            tanggal_tayang=start_at,
+            tanggal_takeout=start_at + timedelta(hours=6),
+            note_requester="Catatan visibility",
+            pic_pemohon="Marketing",
+        )
+        jadwal_tayang.lokasi.set([self.lokasi])
+        return jadwal_tayang
+
+    def test_logged_in_user_can_view_other_users_jadwal_tayang_list_and_detail(self):
+        jadwal_tayang = self.create_jadwal_tayang()
+        self.client.force_login(self.viewer)
+
+        list_response = self.client.get(reverse("jadwal_tayang_list"))
+        detail_response = self.client.get(reverse("jadwal_tayang_detail", args=[jadwal_tayang.pk]))
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertContains(list_response, "Brand Visibility")
+        self.assertContains(list_response, "owner_jt")
+        self.assertContains(detail_response, "Brand Visibility")
+        self.assertContains(detail_response, "owner_jt")
+
+    def test_dashboard_counts_visible_jadwal_tayang_for_logged_in_user(self):
+        self.create_jadwal_tayang()
+        self.client.force_login(self.viewer)
+
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["total_jt"], 1)
+
+
+@override_settings(ALLOWED_HOSTS=["testserver", "localhost"])
+class TakeoutNotificationTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._media_root = tempfile.mkdtemp()
+        cls._media_override = override_settings(MEDIA_ROOT=cls._media_root)
+        cls._media_override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._media_override.disable()
+        shutil.rmtree(cls._media_root, ignore_errors=True)
+        super().tearDownClass()
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = get_user_model().objects.create_superuser(
+            username="admin_notification",
+            email="admin_notification@example.com",
+            password="password123",
+        )
+        cls.user = get_user_model().objects.create_user(
+            username="staff_notification",
+            password="password123",
+        )
+        cls.brand = BrandMateri.objects.create(name="Brand Notification")
+        cls.lokasi = Lokasi.objects.create(name="Lokasi Notification")
+        cls.led_type = LEDType.objects.create(name="LED Notification")
+        TakeoutAlertRule.objects.all().delete()
+        cls.warning_rule = TakeoutAlertRule.objects.create(
+            name="H-1 Warning",
+            offset_unit=TakeoutAlertRule.OffsetUnit.DAY,
+            offset_value=1,
+            urgency=TakeoutAlertRule.Urgency.WARNING,
+            is_active=True,
+        )
+        cls.urgent_rule = TakeoutAlertRule.objects.create(
+            name="Jam-6 Urgent",
+            offset_unit=TakeoutAlertRule.OffsetUnit.HOUR,
+            offset_value=6,
+            urgency=TakeoutAlertRule.Urgency.URGENT,
+            is_active=True,
+        )
+
+    def _upload_file(self, name):
+        return SimpleUploadedFile(name, b"fake-image-bytes", content_type="image/jpeg")
+
+    def create_jadwal_tayang(self, takeout_in_hours=4):
+        start_at = timezone.now() - timedelta(hours=2)
+        jadwal_tayang = JadwalTayang.objects.create(
+            submitted_by=self.admin,
+            brand_materi=self.brand,
+            jenis_led=self.led_type,
+            tanggal_tayang=start_at,
+            tanggal_takeout=timezone.now() + timedelta(hours=takeout_in_hours),
+            note_requester="Catatan requester",
+            pic_pemohon="Marketing",
+        )
+        jadwal_tayang.lokasi.set([self.lokasi])
+        return jadwal_tayang
+
+    def test_notification_summary_returns_warning_and_urgent_notifications(self):
+        jadwal_tayang = self.create_jadwal_tayang(takeout_in_hours=4)
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("notification_summary"), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["count"], 2)
+        self.assertEqual(payload["urgent_count"], 1)
+        self.assertIn("H-1 Warning", payload["html"])
+        self.assertIn("Jam-6 Urgent", payload["html"])
+        self.assertEqual(
+            payload["urgent_notifications"][0]["detail_url"],
+            reverse("jadwal_tayang_detail", args=[jadwal_tayang.pk]),
+        )
+
+    def test_notification_list_available_for_logged_in_users(self):
+        self.create_jadwal_tayang(takeout_in_hours=4)
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("notification_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Notifications")
+        self.assertContains(response, "H-1 Warning")
+        self.assertContains(response, "Jam-6 Urgent")
+
+    def test_notifications_disappear_after_takeout_photo_exists(self):
+        jadwal_tayang = self.create_jadwal_tayang(takeout_in_hours=4)
+        JadwalTayangFotoTakeout.objects.create(
+            jadwal_tayang=jadwal_tayang,
+            foto=self._upload_file("takeout-finished.jpg"),
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("notification_summary"), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["count"], 0)
+        self.assertEqual(payload["urgent_count"], 0)
+
+    def test_admin_can_create_takeout_alert_rule(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            reverse("takeout_alert_rule_create"),
+            data={
+                "name": "Jam-2 Warning",
+                "offset_unit": TakeoutAlertRule.OffsetUnit.HOUR,
+                "offset_value": 2,
+                "urgency": TakeoutAlertRule.Urgency.WARNING,
+                "is_active": "on",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        created_rule = TakeoutAlertRule.objects.get(name="Jam-2 Warning")
+        self.assertEqual(response.status_code, 200)
+        self.assertJSONEqual(response.content, {"success": True})
+        self.assertEqual(created_rule.lead_minutes, 120)

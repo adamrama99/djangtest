@@ -1,0 +1,147 @@
+{% extends "layouts/base.html" %}
+{% block title %}Aturan Notifikasi Takeout{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h3 class="mb-0"><i class="bi bi-bell-fill me-2"></i>Aturan Notifikasi Takeout</h3>
+    <p class="text-muted mb-0 small">Kelola kapan warning dan urgent muncul sebelum takeout.</p>
+  </div>
+  <button type="button" class="btn btn-primary" onclick="loadModal('{% url 'takeout_alert_rule_create' %}')">
+    <i class="bi bi-plus-lg me-1"></i> Add Rule
+  </button>
+</div>
+
+<div class="card card-primary card-outline">
+  <div class="card-header">
+    <h3 class="card-title mb-0">
+      <i class="bi bi-list-ul me-2"></i>All Alert Rules
+      <span class="badge bg-secondary ms-2">{{ rules|length }}</span>
+    </h3>
+  </div>
+  <div class="card-body p-0 table-responsive">
+    <table class="table table-striped table-hover align-middle mb-0">
+      <thead>
+        <tr>
+          <th style="width:60px">#</th>
+          <th>Name</th>
+          <th>Trigger</th>
+          <th>Urgency</th>
+          <th>Status</th>
+          <th style="width:160px" class="text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rule in rules %}
+        <tr>
+          <td class="text-muted">{{ rule.id }}</td>
+          <td class="fw-semibold">{{ rule.name }}</td>
+          <td>
+            <span class="badge text-bg-secondary">{{ rule.offset_display }}</span>
+          </td>
+          <td>
+            <span class="badge text-bg-{% if rule.urgency == 'URGENT' %}danger{% else %}warning{% endif %}">
+              {{ rule.get_urgency_display }}
+            </span>
+          </td>
+          <td>
+            {% if rule.is_active %}
+            <span class="badge text-bg-success">Active</span>
+            {% else %}
+            <span class="badge text-bg-secondary">Inactive</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            <button type="button" class="btn btn-sm btn-warning me-1" onclick="loadModal('{% url 'takeout_alert_rule_edit' rule.id %}')">
+              <i class="bi bi-pencil-fill"></i>
+            </button>
+            <button type="button" class="btn btn-sm btn-danger" onclick="loadModal('{% url 'takeout_alert_rule_delete' rule.id %}')">
+              <i class="bi bi-trash-fill"></i>
+            </button>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="text-center text-muted py-5">
+            <i class="bi bi-bell-slash display-6 d-block mb-2"></i>
+            Belum ada aturan notifikasi. Tambahkan rule pertama sekarang.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal fade" id="dynamicModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" id="dynamicModalContent"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const modalEl = document.getElementById('dynamicModal');
+  const modalContent = document.getElementById('dynamicModalContent');
+  const bsModal = new bootstrap.Modal(modalEl);
+
+  function loadModal(url) {
+    modalContent.innerHTML = '<div class="modal-body text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>';
+    bsModal.show();
+
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(r => r.text())
+      .then(html => {
+        modalContent.innerHTML = html;
+        bindModalForm(url);
+      })
+      .catch(() => {
+        modalContent.innerHTML = '<div class="modal-body text-center py-4 text-danger"><i class="bi bi-exclamation-circle fs-1 d-block mb-2"></i>Failed to load content.</div>';
+      });
+  }
+
+  function bindModalForm(actionUrl) {
+    const form = modalContent.querySelector('#modal-form');
+    if (!form) return;
+
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      const submitBtn = form.querySelector('button[type="submit"]');
+      const originalHtml = submitBtn ? submitBtn.innerHTML : '';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
+      }
+
+      fetch(actionUrl, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: new FormData(form),
+      })
+        .then(r => {
+          const contentType = r.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            return r.json().then(data => ({ type: 'json', data }));
+          }
+          return r.text().then(data => ({ type: 'html', data }));
+        })
+        .then(result => {
+          if (result.type === 'json' && result.data.success) {
+            bsModal.hide();
+            location.reload();
+            return;
+          }
+          modalContent.innerHTML = result.data;
+          bindModalForm(actionUrl);
+        })
+        .catch(() => {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalHtml;
+          }
+        });
+    });
+  }
+</script>
+{% endblock %}

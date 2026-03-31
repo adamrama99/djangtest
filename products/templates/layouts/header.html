@@ -13,6 +13,28 @@
     <!--end::Start Navbar Links-->
     <!--begin::End Navbar Links-->
     <ul class="navbar-nav ms-auto">
+      <li class="nav-item dropdown" id="notification-center" data-summary-url="{% url 'notification_summary' %}">
+        <a href="#" class="nav-link position-relative" data-bs-toggle="dropdown" aria-expanded="false">
+          <i class="bi bi-bell fs-5"></i>
+          <span id="notification-badge" class="navbar-badge badge text-bg-danger" style="display:none;">0</span>
+        </a>
+        <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end p-0" style="min-width: 360px;">
+          <div class="dropdown-header d-flex justify-content-between align-items-center px-3 py-2">
+            <span class="fw-semibold">Takeout Notifications</span>
+            <span id="notification-dropdown-count" class="badge text-bg-secondary">0</span>
+          </div>
+          <div id="notification-dropdown-body">
+            <div class="px-3 py-4 text-center text-body-secondary small">
+              <div class="spinner-border spinner-border-sm me-2" role="status"></div>Loading...
+            </div>
+          </div>
+          <div class="dropdown-footer d-flex justify-content-between gap-2 px-3 py-2 border-top">
+            <a href="{% url 'notification_list' %}" class="btn btn-sm btn-outline-primary w-100">
+              <i class="bi bi-list-ul me-1"></i>View All
+            </a>
+          </div>
+        </div>
+      </li>
       <!--begin::Fullscreen Toggle-->
       <li class="nav-item">
         <a class="nav-link" href="#" data-lte-toggle="fullscreen">

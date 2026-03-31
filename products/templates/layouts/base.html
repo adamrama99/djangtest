@@ -53,12 +53,20 @@
     [data-bs-theme="dark"] .select2-container--bootstrap-5 .select2-selection--multiple .select2-selection__choice {
       background-color: #495057; border-color: #6c757d; color: #e9ecef;
     }
+    #notification-dropdown-body {
+      max-height: 420px;
+      overflow-y: auto;
+    }
+    .urgent-toast {
+      min-width: 340px;
+      border-left: 4px solid #dc3545;
+    }
   </style>
 
   {% block extra_css %}{% endblock %}
 </head>
 
-<body class="layout-fixed sidebar-expand-lg sidebar-open bg-body-tertiary">
+<body class="layout-fixed sidebar-mini sidebar-expand-lg {% if request.resolver_match.url_name == 'dashboard' %}sidebar-collapse{% else %}sidebar-open{% endif %} bg-body-tertiary">
   <!--begin::App Wrapper-->
   <div class="app-wrapper">
 
@@ -92,6 +100,8 @@
   </div>
   <!--end::App Wrapper-->
 
+  <div id="urgent-toast-container" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1090;"></div>
+
   <!-- OverlayScrollbars JS -->
   <script src="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.11.0/browser/overlayscrollbars.browser.es5.min.js"
     crossorigin="anonymous"></script>
@@ -106,6 +116,94 @@
   <!-- jQuery + Select2 JS -->
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+  <script>
+    (function () {
+      const notificationCenter = document.getElementById('notification-center');
+      if (!notificationCenter) return;
+
+      const summaryUrl = notificationCenter.dataset.summaryUrl;
+      const dropdownBody = document.getElementById('notification-dropdown-body');
+      const badge = document.getElementById('notification-badge');
+      const countBadge = document.getElementById('notification-dropdown-count');
+      const toastContainer = document.getElementById('urgent-toast-container');
+      let urgentNotifications = [];
+
+      function escapeHtml(value) {
+        return String(value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function updateBadges(total) {
+        countBadge.textContent = total;
+        if (total > 0) {
+          badge.style.display = 'inline-flex';
+          badge.textContent = total;
+        } else {
+          badge.style.display = 'none';
+          badge.textContent = '0';
+        }
+      }
+
+      function showUrgentToasts() {
+        if (!urgentNotifications.length) return;
+
+        urgentNotifications.forEach((notification) => {
+          const toastEl = document.createElement('div');
+          toastEl.className = 'toast urgent-toast text-bg-dark border-0';
+          toastEl.role = 'alert';
+          toastEl.ariaLive = 'assertive';
+          toastEl.ariaAtomic = 'true';
+          toastEl.innerHTML = `
+            <div class="toast-header bg-danger text-white border-0">
+              <i class="bi bi-exclamation-triangle-fill me-2"></i>
+              <strong class="me-auto">${escapeHtml(notification.title)}</strong>
+              <small>${escapeHtml(notification.offset_display)}</small>
+              <button type="button" class="btn-close btn-close-white ms-2" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+              <div class="fw-semibold mb-1">${escapeHtml(notification.time_status)}</div>
+              <div class="small">${escapeHtml(notification.message)}</div>
+              <a href="${escapeHtml(notification.detail_url)}" class="btn btn-sm btn-light mt-3">
+                <i class="bi bi-eye-fill me-1"></i>Buka Jadwal
+              </a>
+            </div>
+          `;
+          toastContainer.appendChild(toastEl);
+          toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+          const toast = new bootstrap.Toast(toastEl, { delay: 8000, autohide: true });
+          toast.show();
+        });
+      }
+
+      function loadNotificationSummary() {
+        fetch(summaryUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+          .then((response) => response.json())
+          .then((data) => {
+            dropdownBody.innerHTML = data.html;
+            urgentNotifications = data.urgent_notifications || [];
+            updateBadges(data.count || 0);
+          })
+          .catch(() => {
+            dropdownBody.innerHTML = `
+              <div class="px-3 py-4 text-center text-danger small">
+                <i class="bi bi-exclamation-circle d-block fs-3 mb-2"></i>
+                Gagal memuat notifikasi.
+              </div>
+            `;
+          });
+      }
+
+      loadNotificationSummary();
+      window.setInterval(loadNotificationSummary, 10000);
+      window.setInterval(showUrgentToasts, 12000);
+      window.setTimeout(showUrgentToasts, 2000);
+    })();
+  </script>
 
   {% block extra_js %}{% endblock %}
 </body>

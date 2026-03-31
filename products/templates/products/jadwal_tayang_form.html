@@ -46,7 +46,13 @@
 {% block content %}
 <div class="mb-4">
     <h3 class="mb-0">{{ title }}</h3>
-    <p class="text-muted mb-0">Buat jadwal tayang untuk materi LED.</p>
+    <p class="text-muted mb-0">
+        {% if is_edit %}
+        Ubah detail jadwal tayang untuk materi LED.
+        {% else %}
+        Buat jadwal tayang untuk materi LED.
+        {% endif %}
+    </p>
 </div>
 
 <div class="row">
@@ -96,7 +102,7 @@
                     </div>
 
                     <div class="row">
-                        <div class="col-lg-5 mb-3">
+                        <div class="col-lg-6 mb-3">
                             <label for="{{ form.brand_materi.id_for_label }}" class="form-label fw-bold">
                                 Brand / Materi <span class="text-danger">*</span>
                             </label>
@@ -106,15 +112,23 @@
                             {% endif %}
                         </div>
 
-                        <div class="col-lg-7 mb-3">
+                        <div class="col-lg-6 mb-3">
                             <label for="{{ form.lokasi.id_for_label }}" class="form-label fw-bold">
                                 Lokasi <span class="text-danger">*</span>
                             </label>
                             {{ form.lokasi }}
-                            <div class="text-muted small mt-1"><i class="bi bi-info-circle me-1"></i>Pilih satu atau beberapa lokasi. Sistem akan membuat satu jadwal terpisah per lokasi.</div>
                             {% if form.lokasi.errors %}
                             <div class="text-danger small mt-1">{% for error in form.lokasi.errors %}{{ error }}{% endfor %}</div>
                             {% endif %}
+                        </div>
+                        <div class="col-12">
+                            <div class="text-muted small mt-1">
+                                {% if is_edit %}
+                                <i class="bi bi-info-circle me-1"></i>Edit jadwal ini tetap untuk satu lokasi.
+                                {% else %}
+                                <i class="bi bi-info-circle me-1"></i>Pilih satu atau beberapa lokasi. Sistem akan membuat satu jadwal terpisah per lokasi.
+                                {% endif %}
+                            </div>
                         </div>
                     </div>
 
@@ -153,7 +167,8 @@
 
                 <div class="card-footer bg-transparent border-top d-flex gap-2">
                     <button type="submit" class="btn btn-success px-4">
-                        <i class="bi bi-send-fill me-1"></i> Submit
+                        <i class="bi {% if is_edit %}bi-save-fill{% else %}bi-send-fill{% endif %} me-1"></i>
+                        {% if is_edit %}Update{% else %}Submit{% endif %}
                     </button>
                     <a href="{% url 'jadwal_tayang_list' %}" class="btn btn-secondary px-4">
                         <i class="bi bi-x-lg me-1"></i> Cancel
@@ -183,11 +198,11 @@
     if ($lokasi.length) {
       $lokasi.select2({
         theme: 'bootstrap-5',
-        placeholder: 'Pilih satu atau beberapa lokasi...',
+        placeholder: '{% if is_edit %}Pilih lokasi...{% else %}Pilih satu atau beberapa lokasi...{% endif %}',
         allowClear: true,
         width: '100%',
         tags: true,
-        closeOnSelect: false,
+        closeOnSelect: {% if is_edit %}true{% else %}false{% endif %},
         createTag: function(params) {
           const term = $.trim(params.term);
           if (term === '') return null;

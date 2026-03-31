@@ -1,0 +1,132 @@
+{% extends "layouts/base.html" %}
+{% block title %}Notifications{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h3 class="mb-0"><i class="bi bi-bell me-2"></i>Notifications</h3>
+    <p class="text-muted mb-0 small">Daftar notifikasi takeout aktif untuk semua user login.</p>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-4">
+    <div class="card card-primary card-outline h-100">
+      <div class="card-body">
+        <div class="text-muted small text-uppercase">Total Aktif</div>
+        <div class="display-6 fw-bold mb-0">{{ notification_total }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card card-warning card-outline h-100">
+      <div class="card-body">
+        <div class="text-muted small text-uppercase">Warning</div>
+        <div class="display-6 fw-bold mb-0">{{ warning_count }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card card-danger card-outline h-100">
+      <div class="card-body">
+        <div class="text-muted small text-uppercase">Urgent</div>
+        <div class="display-6 fw-bold mb-0">{{ urgent_count }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card card-primary card-outline">
+  <div class="card-header">
+    <h3 class="card-title mb-0">
+      <i class="bi bi-list-ul me-2"></i>Active Notifications
+      <span class="badge bg-secondary ms-2">{{ notification_total }}</span>
+    </h3>
+  </div>
+  <div class="card-body p-0 table-responsive">
+    <table class="table table-striped table-hover align-middle mb-0">
+      <thead>
+        <tr>
+          <th style="width:60px">#</th>
+          <th>Urgency</th>
+          <th>Rule</th>
+          <th>Jadwal</th>
+          <th>Takeout</th>
+          <th>Status Waktu</th>
+          <th style="width:120px" class="text-center">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for notification in notifications %}
+        <tr>
+          <td class="text-muted">{{ notifications.start_index|add:forloop.counter0 }}</td>
+          <td>
+            <span class="badge text-bg-{% if notification.urgency == 'URGENT' %}danger{% else %}warning{% endif %}">
+              {{ notification.urgency_label }}
+            </span>
+          </td>
+          <td>
+            <div class="fw-semibold">{{ notification.rule_name }}</div>
+            <div class="small text-muted">{{ notification.offset_display }}</div>
+          </td>
+          <td>
+            <div class="fw-semibold">{{ notification.jadwal_label }}</div>
+            <div class="small text-muted">{{ notification.message }}</div>
+          </td>
+          <td class="small">{{ notification.takeout_at_display }}</td>
+          <td>
+            <span class="badge text-bg-secondary">{{ notification.time_status }}</span>
+          </td>
+          <td class="text-center">
+            <a href="{{ notification.detail_url }}" class="btn btn-sm btn-info">
+              <i class="bi bi-eye-fill me-1"></i>Detail
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="text-center text-muted py-5">
+            <i class="bi bi-bell-slash display-6 d-block mb-2"></i>
+            Belum ada notifikasi aktif.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if notifications.has_other_pages %}
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <span class="text-muted small">
+      Halaman {{ notifications.number }} dari {{ notifications.paginator.num_pages }}
+      ({{ notification_total }} total)
+    </span>
+    <nav>
+      <ul class="pagination pagination-sm mb-0">
+        {% if notifications.has_previous %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ notifications.previous_page_number }}">&laquo; Prev</a>
+        </li>
+        {% endif %}
+        {% for num in notifications.paginator.page_range %}
+        {% if notifications.number == num %}
+        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+        {% elif num > notifications.number|add:"-3" and num < notifications.number|add:"3" %}
+        <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
+        {% endif %}
+        {% endfor %}
+        {% if notifications.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ notifications.next_page_number }}">Next &raquo;</a>
+        </li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+  {% elif notification_total %}
+  <div class="card-footer text-muted small">
+    Showing {{ notification_total }} notification{{ notification_total|pluralize }}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

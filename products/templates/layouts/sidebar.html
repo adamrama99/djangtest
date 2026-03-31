@@ -27,6 +27,14 @@
           </a>
         </li>
 
+        <li class="nav-item">
+          <a href="{% url 'notification_list' %}"
+            class="nav-link {% if request.resolver_match.url_name == 'notification_list' %}active{% endif %}">
+            <i class="nav-icon bi bi-bell"></i>
+            <p>Notifications</p>
+          </a>
+        </li>
+
         
         <!-- Documentation Requests -->
         <li class="nav-header">SERVICES</li>
@@ -113,6 +121,14 @@
             class="nav-link {% if request.resolver_match.url_name == 'edit_history_list' %}active{% endif %}">
             <i class="nav-icon bi bi-clock-history"></i>
             <p>Edit History</p>
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a href="{% url 'takeout_alert_rule_list' %}"
+            class="nav-link {% if request.resolver_match.url_name in 'takeout_alert_rule_list,takeout_alert_rule_create,takeout_alert_rule_edit,takeout_alert_rule_delete' %}active{% endif %}">
+            <i class="nav-icon bi bi-bell-fill"></i>
+            <p>Takeout Alert Rules</p>
           </a>
         </li>
 

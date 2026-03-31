@@ -23,9 +23,17 @@ urlpatterns = [
 
     # Edit History
     path("history/", views.edit_history_list, name="edit_history_list"),
+    path("notifications/", views.notification_list, name="notification_list"),
+    path("api/notifications/summary/", views.notification_summary, name="notification_summary"),
 
     # AJAX helper
     path("api/lokasi/create/", views.ajax_create_lokasi, name="ajax_create_lokasi"),
+
+    # Takeout Alert Rules
+    path("notifications/rules/", views.takeout_alert_rule_list, name="takeout_alert_rule_list"),
+    path("notifications/rules/create/", views.takeout_alert_rule_create, name="takeout_alert_rule_create"),
+    path("notifications/rules/<int:pk>/edit/", views.takeout_alert_rule_edit, name="takeout_alert_rule_edit"),
+    path("notifications/rules/<int:pk>/delete/", views.takeout_alert_rule_delete, name="takeout_alert_rule_delete"),
 
     # Master Data
     path("master/<slug:slug>/", views.master_data_list, name="master_data_list"),
@@ -36,6 +44,7 @@ urlpatterns = [
     # Jadwal Tayang
     path("jadwal-tayang/", views.jadwal_tayang_list, name="jadwal_tayang_list"),
     path("jadwal-tayang/create/", views.jadwal_tayang_create, name="jadwal_tayang_create"),
+    path("jadwal-tayang/<int:pk>/edit/", views.jadwal_tayang_edit, name="jadwal_tayang_edit"),
     path("jadwal-tayang/<int:pk>/", views.jadwal_tayang_detail, name="jadwal_tayang_detail"),
     path("jadwal-tayang/<int:pk>/delete/", views.jadwal_tayang_delete, name="jadwal_tayang_delete"),
     path("jadwal-tayang/<int:pk>/status/", views.jadwal_tayang_update_status, name="jadwal_tayang_update_status"),
