@@ -135,6 +135,10 @@ class DocumentationRequestLokasiAssignment(models.Model):
 
 
 class EditHistory(models.Model):
+    class RequestType(models.TextChoices):
+        DOC_REQUEST = "DOC_REQUEST", "Documentation Request"
+        JADWAL_TAYANG = "JADWAL_TAYANG", "Jadwal Tayang"
+
     ACTION_CHOICES = [
         ('CREATE', 'Created'),
         ('UPDATE', 'Updated'),
@@ -146,6 +150,11 @@ class EditHistory(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         related_name="edit_history",
+    )
+    request_type = models.CharField(
+        max_length=20,
+        choices=RequestType.choices,
+        default=RequestType.DOC_REQUEST,
     )
     action = models.CharField(max_length=10, choices=ACTION_CHOICES)
     doc_request_id = models.IntegerField(null=True, blank=True)
@@ -160,6 +169,13 @@ class EditHistory(models.Model):
 
     def __str__(self):
         return f"{self.user} – {self.get_action_display()} – {self.doc_request_label}"
+
+
+    @property
+    def detail_url_name(self):
+        if self.request_type == self.RequestType.JADWAL_TAYANG:
+            return "jadwal_tayang_detail"
+        return "doc_request_detail"
 
 
 class NamaPerangkat(models.Model):

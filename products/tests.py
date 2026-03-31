@@ -1,8 +1,12 @@
-from datetime import date
+from datetime import date, timedelta
+import shutil
+import tempfile
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from .forms import DocumentationRequestForm
 from .models import (
@@ -10,6 +14,8 @@ from .models import (
     DocumentationRequest,
     DocumentationRequestLokasiAssignment,
     Dokumentator,
+    EditHistory,
+    JadwalTayang,
     LEDType,
     Lokasi,
     Requirement,
@@ -163,3 +169,173 @@ class DocumentationRequestMultiLokasiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Dokumentator A")
         self.assertContains(response, "Dokumentator B")
+
+
+@override_settings(ALLOWED_HOSTS=["testserver", "localhost"])
+class JadwalTayangHistoryTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._media_root = tempfile.mkdtemp()
+        cls._media_override = override_settings(MEDIA_ROOT=cls._media_root)
+        cls._media_override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._media_override.disable()
+        shutil.rmtree(cls._media_root, ignore_errors=True)
+        super().tearDownClass()
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = get_user_model().objects.create_superuser(
+            username="admin_jt",
+            email="admin_jt@example.com",
+            password="password123",
+        )
+        cls.brand = BrandMateri.objects.create(name="Brand JT")
+        cls.lokasi_a = Lokasi.objects.create(name="Lokasi JT A")
+        cls.lokasi_b = Lokasi.objects.create(name="Lokasi JT B")
+        cls.led_type = LEDType.objects.create(name="Outdoor JT")
+        cls.dokumentator_a = Dokumentator.objects.create(name="Dokumentator JT A")
+        cls.dokumentator_b = Dokumentator.objects.create(name="Dokumentator JT B")
+
+    def _datetime_input(self, value):
+        return timezone.localtime(value).strftime("%Y-%m-%dT%H:%M")
+
+    def _upload_file(self, name):
+        return SimpleUploadedFile(name, b"fake-image-bytes", content_type="image/jpeg")
+
+    def create_jadwal_tayang(self):
+        start_at = timezone.now()
+        jadwal_tayang = JadwalTayang.objects.create(
+            submitted_by=self.admin,
+            brand_materi=self.brand,
+            jenis_led=self.led_type,
+            tanggal_tayang=start_at,
+            tanggal_takeout=start_at + timedelta(hours=6),
+            note_requester="Catatan requester",
+            pic_pemohon="Marketing",
+        )
+        jadwal_tayang.lokasi.set([self.lokasi_a])
+        return jadwal_tayang
+
+    def test_create_view_logs_history_for_each_created_location(self):
+        self.client.force_login(self.admin)
+        start_at = timezone.now()
+
+        response = self.client.post(
+            reverse("jadwal_tayang_create"),
+            data={
+                "brand_materi": str(self.brand.id),
+                "lokasi": [str(self.lokasi_a.id), str(self.lokasi_b.id)],
+                "jenis_led": str(self.led_type.id),
+                "tanggal_tayang": self._datetime_input(start_at),
+                "tanggal_takeout": self._datetime_input(start_at + timedelta(hours=6)),
+                "note_requester": "Catatan requester",
+                "pic_pemohon": "Marketing",
+            },
+        )
+
+        history_entries = EditHistory.objects.filter(
+            request_type=EditHistory.RequestType.JADWAL_TAYANG,
+            action="CREATE",
+        ).order_by("doc_request_id")
+
+        self.assertRedirects(response, reverse("jadwal_tayang_list"))
+        self.assertEqual(JadwalTayang.objects.count(), 2)
+        self.assertEqual(history_entries.count(), 2)
+        self.assertEqual(
+            list(history_entries.values_list("new_value", flat=True)),
+            [
+                "Jadwal tayang baru dibuat untuk lokasi Lokasi JT A",
+                "Jadwal tayang baru dibuat untuk lokasi Lokasi JT B",
+            ],
+        )
+
+        history_page = self.client.get(reverse("edit_history_list"))
+        for history_entry in history_entries:
+            self.assertContains(
+                history_page,
+                reverse("jadwal_tayang_detail", args=[history_entry.doc_request_id]),
+            )
+
+    def test_status_and_pelaksana_updates_are_logged(self):
+        jadwal_tayang = self.create_jadwal_tayang()
+        self.client.force_login(self.admin)
+
+        status_response = self.client.post(
+            reverse("jadwal_tayang_update_status", args=[jadwal_tayang.pk]),
+            {"status": "SEDANG_TAYANG"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        pelaksana_response = self.client.post(
+            reverse("jadwal_tayang_update_pelaksana", args=[jadwal_tayang.pk]),
+            {"pelaksana[]": [self.dokumentator_b.pk, self.dokumentator_a.pk]},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        status_history = EditHistory.objects.get(
+            request_type=EditHistory.RequestType.JADWAL_TAYANG,
+            doc_request_id=jadwal_tayang.pk,
+            field_name="Status",
+        )
+        pelaksana_history = EditHistory.objects.get(
+            request_type=EditHistory.RequestType.JADWAL_TAYANG,
+            doc_request_id=jadwal_tayang.pk,
+            field_name="Pelaksana",
+        )
+
+        self.assertEqual(status_response.status_code, 200)
+        self.assertEqual(pelaksana_response.status_code, 200)
+        self.assertEqual(status_history.old_value, "Belum Tayang")
+        self.assertEqual(status_history.new_value, "Sedang Tayang")
+        self.assertEqual(
+            pelaksana_history.new_value,
+            "Dokumentator JT A, Dokumentator JT B",
+        )
+
+    def test_upload_view_logs_note_files_and_auto_status(self):
+        jadwal_tayang = self.create_jadwal_tayang()
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            reverse("jadwal_tayang_upload_photos", args=[jadwal_tayang.pk]),
+            data={
+                "note_executor": "Catatan executor",
+                "foto_tayang": self._upload_file("tayang.jpg"),
+                "foto_playlist_pagi": self._upload_file("playlist.jpg"),
+                "foto_takeout": self._upload_file("takeout.jpg"),
+            },
+        )
+
+        history_entries = EditHistory.objects.filter(
+            request_type=EditHistory.RequestType.JADWAL_TAYANG,
+            doc_request_id=jadwal_tayang.pk,
+        )
+        field_names = set(history_entries.values_list("field_name", flat=True))
+        status_history = history_entries.get(field_name="Status")
+
+        self.assertRedirects(response, reverse("jadwal_tayang_detail", args=[jadwal_tayang.pk]))
+        self.assertSetEqual(
+            field_names,
+            {"Notes Executor", "Foto Tayang", "Bukti Playlist", "Foto Takeout", "Status"},
+        )
+        self.assertEqual(status_history.old_value, "Belum Tayang")
+        self.assertEqual(status_history.new_value, "Sudah Takeout")
+
+    def test_delete_logs_history(self):
+        jadwal_tayang = self.create_jadwal_tayang()
+        self.client.force_login(self.admin)
+
+        response = self.client.post(reverse("jadwal_tayang_delete", args=[jadwal_tayang.pk]))
+
+        history_entry = EditHistory.objects.get(
+            request_type=EditHistory.RequestType.JADWAL_TAYANG,
+            action="DELETE",
+        )
+
+        self.assertRedirects(response, reverse("jadwal_tayang_list"))
+        self.assertFalse(JadwalTayang.objects.filter(pk=jadwal_tayang.pk).exists())
+        self.assertEqual(history_entry.doc_request_id, jadwal_tayang.pk)
+        self.assertEqual(history_entry.new_value, "Dihapus")

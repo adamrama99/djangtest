@@ -51,6 +51,46 @@ def _doc_request_label(doc_request):
     return label
 
 
+def _jadwal_tayang_label(jadwal_tayang):
+    brand = jadwal_tayang.brand_materi.name if jadwal_tayang.brand_materi else "N/A"
+    label = f"{brand} - {jadwal_tayang.tanggal_tayang}"
+    if not getattr(jadwal_tayang, "pk", None):
+        return label
+
+    lokasi_label = jadwal_tayang.lokasi_display()
+    if lokasi_label and lokasi_label != "-":
+        return f"{label} - {lokasi_label}"
+    return label
+
+
+def _joined_names(queryset, empty_label="Belum ditentukan"):
+    names = list(queryset.order_by("name").values_list("name", flat=True))
+    return ", ".join(names) if names else empty_label
+
+
+def _create_edit_history(
+    *,
+    user,
+    action,
+    request_type,
+    object_id,
+    label,
+    field_name="",
+    old_value="",
+    new_value="",
+):
+    EditHistory.objects.create(
+        user=user,
+        action=action,
+        request_type=request_type,
+        doc_request_id=object_id,
+        doc_request_label=label,
+        field_name=field_name,
+        old_value=old_value,
+        new_value=new_value,
+    )
+
+
 def _forbidden_response(request, message="Anda tidak memiliki izin untuk mengakses halaman ini."):
     """Render a proper 403 page with back button."""
     from django.template.response import TemplateResponse
@@ -210,11 +250,13 @@ def doc_request_create(request):
                 doc_req.requirements.set(requirements)
                 doc_req.view_photo.set(view_photo)
                 doc_req.jenis_kamera.set(jenis_kamera)
-                EditHistory.objects.create(
-                    user=request.user, action='CREATE',
-                    doc_request_id=doc_req.id, doc_request_label=_doc_request_label(doc_req),
-                    field_name='', old_value='',
-                    new_value=f'Request baru dibuat untuk lokasi {lokasi.name}',
+                _create_edit_history(
+                    user=request.user,
+                    action="CREATE",
+                    request_type=EditHistory.RequestType.DOC_REQUEST,
+                    object_id=doc_req.id,
+                    label=_doc_request_label(doc_req),
+                    new_value=f"Request baru dibuat untuk lokasi {lokasi.name}",
                 )
         return redirect("doc_request_list")
     return render(request, "products/request_form.html", {"form": form, "title": "Create Documentation Request"})
@@ -246,10 +288,14 @@ def doc_request_delete(request, pk):
     doc_request = get_object_or_404(DocumentationRequest, pk=pk)
     if request.method == "POST":
         label = _doc_request_label(doc_request)
-        EditHistory.objects.create(
-            user=request.user, action='DELETE',
-            doc_request_id=pk, doc_request_label=label,
-            field_name='', old_value=label, new_value='Dihapus',
+        _create_edit_history(
+            user=request.user,
+            action="DELETE",
+            request_type=EditHistory.RequestType.DOC_REQUEST,
+            object_id=pk,
+            label=label,
+            old_value=label,
+            new_value="Dihapus",
         )
         doc_request.delete()
         return redirect("doc_request_list")
@@ -268,10 +314,15 @@ def doc_request_update_status(request, pk):
             doc_request.status = new_status
             doc_request.save(update_fields=["status"])
             new_label = doc_request.get_status_display()
-            EditHistory.objects.create(
-                user=request.user, action='UPDATE',
-                doc_request_id=pk, doc_request_label=_doc_request_label(doc_request),
-                field_name='Status', old_value=old_status, new_value=new_label,
+            _create_edit_history(
+                user=request.user,
+                action="UPDATE",
+                request_type=EditHistory.RequestType.DOC_REQUEST,
+                object_id=pk,
+                label=_doc_request_label(doc_request),
+                field_name="Status",
+                old_value=old_status,
+                new_value=new_label,
             )
             return JsonResponse({"success": True, "status": new_status})
         return JsonResponse({"success": False, "error": "Invalid status"}, status=400)
@@ -293,11 +344,13 @@ def doc_request_update_lokasi_pelaksana(request, assignment_pk):
         assignment.pelaksana.set(pelaksana_ids)
         new_names = assignment.pelaksana_display()
         if old_names != new_names:
-            EditHistory.objects.create(
-                user=request.user, action='UPDATE',
-                doc_request_id=assignment.documentation_request_id,
-                doc_request_label=_doc_request_label(assignment.documentation_request),
-                field_name=f'Pelaksana ({assignment.lokasi.name})',
+            _create_edit_history(
+                user=request.user,
+                action="UPDATE",
+                request_type=EditHistory.RequestType.DOC_REQUEST,
+                object_id=assignment.documentation_request_id,
+                label=_doc_request_label(assignment.documentation_request),
+                field_name=f"Pelaksana ({assignment.lokasi.name})",
                 old_value=old_names,
                 new_value=new_names,
             )
@@ -547,6 +600,14 @@ def jadwal_tayang_create(request):
                     pic_pemohon=form.cleaned_data["pic_pemohon"],
                 )
                 jt.lokasi.set([lokasi])
+                _create_edit_history(
+                    user=request.user,
+                    action="CREATE",
+                    request_type=EditHistory.RequestType.JADWAL_TAYANG,
+                    object_id=jt.id,
+                    label=_jadwal_tayang_label(jt),
+                    new_value=f"Jadwal tayang baru dibuat untuk lokasi {lokasi.name}",
+                )
         return redirect("jadwal_tayang_list")
     return render(request, "products/jadwal_tayang_form.html", {
         "form": form,
@@ -585,8 +646,21 @@ def jadwal_tayang_detail(request, pk):
 
 @admin_required
 def jadwal_tayang_delete(request, pk):
-    jt = get_object_or_404(JadwalTayang, pk=pk)
+    jt = get_object_or_404(
+        JadwalTayang.objects.select_related("brand_materi").prefetch_related("lokasi"),
+        pk=pk,
+    )
     if request.method == "POST":
+        label = _jadwal_tayang_label(jt)
+        _create_edit_history(
+            user=request.user,
+            action="DELETE",
+            request_type=EditHistory.RequestType.JADWAL_TAYANG,
+            object_id=pk,
+            label=label,
+            old_value=label,
+            new_value="Dihapus",
+        )
         jt.delete()
         return redirect("jadwal_tayang_list")
     return render(request, "products/jadwal_tayang_delete.html", {"request_obj": jt})
@@ -595,12 +669,28 @@ def jadwal_tayang_delete(request, pk):
 @executor_or_admin_required
 def jadwal_tayang_update_status(request, pk):
     if request.method == "POST":
-        jt = get_object_or_404(JadwalTayang, pk=pk)
+        jt = get_object_or_404(
+            JadwalTayang.objects.select_related("brand_materi").prefetch_related("lokasi"),
+            pk=pk,
+        )
+        old_status = jt.get_status_display()
         new_status = request.POST.get("status", "")
         valid = [c[0] for c in JadwalTayang.STATUS_CHOICES]
         if new_status in valid:
             jt.status = new_status
             jt.save(update_fields=["status"])
+            new_label = jt.get_status_display()
+            if old_status != new_label:
+                _create_edit_history(
+                    user=request.user,
+                    action="UPDATE",
+                    request_type=EditHistory.RequestType.JADWAL_TAYANG,
+                    object_id=pk,
+                    label=_jadwal_tayang_label(jt),
+                    field_name="Status",
+                    old_value=old_status,
+                    new_value=new_label,
+                )
             return JsonResponse({"success": True, "status": new_status})
         return JsonResponse({"success": False, "error": "Invalid status"}, status=400)
     return HttpResponseForbidden("POST only.")
@@ -609,9 +699,25 @@ def jadwal_tayang_update_status(request, pk):
 @admin_required
 def jadwal_tayang_update_pelaksana(request, pk):
     if request.method == "POST":
-        jt = get_object_or_404(JadwalTayang, pk=pk)
+        jt = get_object_or_404(
+            JadwalTayang.objects.select_related("brand_materi").prefetch_related("lokasi"),
+            pk=pk,
+        )
+        old_names = _joined_names(jt.pelaksana)
         pelaksana_ids = request.POST.getlist("pelaksana[]")
         jt.pelaksana.set(pelaksana_ids)
+        new_names = _joined_names(jt.pelaksana)
+        if old_names != new_names:
+            _create_edit_history(
+                user=request.user,
+                action="UPDATE",
+                request_type=EditHistory.RequestType.JADWAL_TAYANG,
+                object_id=pk,
+                label=_jadwal_tayang_label(jt),
+                field_name="Pelaksana",
+                old_value=old_names,
+                new_value=new_names,
+            )
         return JsonResponse({"success": True})
     return HttpResponseForbidden("POST only.")
 
@@ -619,18 +725,50 @@ def jadwal_tayang_update_pelaksana(request, pk):
 @executor_or_admin_required
 def jadwal_tayang_upload_photos(request, pk):
     """Executor/Admin upload photos & notes for a Jadwal Tayang."""
-    jt = get_object_or_404(JadwalTayang, pk=pk)
+    jt = get_object_or_404(
+        JadwalTayang.objects.select_related("brand_materi").prefetch_related("lokasi"),
+        pk=pk,
+    )
 
     if request.method == "POST":
+        label = _jadwal_tayang_label(jt)
+        old_status = jt.get_status_display()
+        old_note_executor = jt.note_executor
+        initial_foto_tayang_count = jt.foto_tayang_set.count()
+        initial_foto_takeout_count = jt.foto_takeout_set.count()
+
         # Save executor notes
         note_executor = request.POST.get("note_executor", "").strip()
-        if note_executor:
+        if note_executor and note_executor != old_note_executor:
             jt.note_executor = note_executor
             jt.save(update_fields=["note_executor"])
+            _create_edit_history(
+                user=request.user,
+                action="UPDATE",
+                request_type=EditHistory.RequestType.JADWAL_TAYANG,
+                object_id=pk,
+                label=label,
+                field_name="Notes Executor",
+                old_value=old_note_executor or "-",
+                new_value=note_executor,
+            )
 
         # Foto Tayang (multiple)
-        for f in request.FILES.getlist("foto_tayang"):
+        foto_tayang_files = request.FILES.getlist("foto_tayang")
+        for f in foto_tayang_files:
             JadwalTayangFotoTayang.objects.create(jadwal_tayang=jt, foto=f)
+        if foto_tayang_files:
+            new_count = jt.foto_tayang_set.count()
+            _create_edit_history(
+                user=request.user,
+                action="UPDATE",
+                request_type=EditHistory.RequestType.JADWAL_TAYANG,
+                object_id=pk,
+                label=label,
+                field_name="Foto Tayang",
+                old_value=f"{initial_foto_tayang_count} foto",
+                new_value=f"{new_count} foto (+{len(foto_tayang_files)} baru)",
+            )
 
         # Bukti Playlist (pagi, siang, malam) — delete old files
         foto_pagi = request.FILES.get("foto_playlist_pagi")
@@ -638,6 +776,13 @@ def jadwal_tayang_upload_photos(request, pk):
         foto_malam = request.FILES.get("foto_playlist_malam")
         if foto_pagi or foto_siang or foto_malam:
             bukti, _ = JadwalTayangBuktiPlaylist.objects.get_or_create(jadwal_tayang=jt)
+            before_slots = []
+            if bukti.foto_pagi:
+                before_slots.append("Pagi")
+            if bukti.foto_siang:
+                before_slots.append("Siang")
+            if bukti.foto_malam:
+                before_slots.append("Malam")
             if foto_pagi:
                 if bukti.foto_pagi and bukti.foto_pagi.storage.exists(bukti.foto_pagi.name):
                     bukti.foto_pagi.delete(save=False)
@@ -651,13 +796,56 @@ def jadwal_tayang_upload_photos(request, pk):
                     bukti.foto_malam.delete(save=False)
                 bukti.foto_malam = foto_malam
             bukti.save()
+            after_slots = []
+            if bukti.foto_pagi:
+                after_slots.append("Pagi")
+            if bukti.foto_siang:
+                after_slots.append("Siang")
+            if bukti.foto_malam:
+                after_slots.append("Malam")
+            _create_edit_history(
+                user=request.user,
+                action="UPDATE",
+                request_type=EditHistory.RequestType.JADWAL_TAYANG,
+                object_id=pk,
+                label=label,
+                field_name="Bukti Playlist",
+                old_value=", ".join(before_slots) or "-",
+                new_value=", ".join(after_slots) or "-",
+            )
 
         # Foto Takeout (multiple)
-        for f in request.FILES.getlist("foto_takeout"):
+        foto_takeout_files = request.FILES.getlist("foto_takeout")
+        for f in foto_takeout_files:
             JadwalTayangFotoTakeout.objects.create(jadwal_tayang=jt, foto=f)
+        if foto_takeout_files:
+            new_count = jt.foto_takeout_set.count()
+            _create_edit_history(
+                user=request.user,
+                action="UPDATE",
+                request_type=EditHistory.RequestType.JADWAL_TAYANG,
+                object_id=pk,
+                label=label,
+                field_name="Foto Takeout",
+                old_value=f"{initial_foto_takeout_count} foto",
+                new_value=f"{new_count} foto (+{len(foto_takeout_files)} baru)",
+            )
 
         # Auto-update status based on photos
         jt.auto_update_status()
+        jt.refresh_from_db(fields=["status"])
+        new_status = jt.get_status_display()
+        if old_status != new_status:
+            _create_edit_history(
+                user=request.user,
+                action="UPDATE",
+                request_type=EditHistory.RequestType.JADWAL_TAYANG,
+                object_id=pk,
+                label=label,
+                field_name="Status",
+                old_value=old_status,
+                new_value=new_status,
+            )
 
         return redirect("jadwal_tayang_detail", pk=pk)
 

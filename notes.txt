@@ -11,3 +11,9 @@ STAFF
   Username : staff
   Password : staff123
   Role     : Staff (submit & lihat doc request sendiri)
+
+
+kalo upload folder ini jangan ikut:
+.venv
+venv
+__pycache__
