@@ -3,6 +3,7 @@ import shutil
 import tempfile
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -30,6 +31,7 @@ from .models import (
 class DocumentationRequestMultiLokasiTests(TestCase):
     @classmethod
     def setUpTestData(cls):
+        requester_group, _ = Group.objects.get_or_create(name="requester")
         cls.admin = get_user_model().objects.create_superuser(
             username="admin",
             email="admin@example.com",
@@ -39,6 +41,7 @@ class DocumentationRequestMultiLokasiTests(TestCase):
             username="staff",
             password="password123",
         )
+        cls.user.groups.add(requester_group)
         cls.brand = BrandMateri.objects.create(name="Brand A")
         cls.lokasi_a = Lokasi.objects.create(name="Lokasi A")
         cls.lokasi_b = Lokasi.objects.create(name="Lokasi B")
@@ -171,6 +174,55 @@ class DocumentationRequestMultiLokasiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Dokumentator A")
         self.assertContains(response, "Dokumentator B")
+
+
+@override_settings(ALLOWED_HOSTS=["testserver", "localhost"])
+class RequestCreationPermissionTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.requester_group, _ = Group.objects.get_or_create(name="requester")
+        cls.executor_group, _ = Group.objects.get_or_create(name="executor")
+        cls.requester = get_user_model().objects.create_user(
+            username="requester_only",
+            password="password123",
+        )
+        cls.requester.groups.add(cls.requester_group)
+        cls.executor = get_user_model().objects.create_user(
+            username="executor_only",
+            password="password123",
+        )
+        cls.executor.groups.add(cls.executor_group)
+
+    def test_executor_cannot_open_doc_and_maintenance_create_pages(self):
+        self.client.force_login(self.executor)
+
+        doc_response = self.client.get(reverse("doc_request_create"))
+        maint_response = self.client.get(reverse("maint_request_create"))
+
+        self.assertEqual(doc_response.status_code, 403)
+        self.assertEqual(maint_response.status_code, 403)
+
+    def test_requester_can_open_doc_and_maintenance_create_pages(self):
+        self.client.force_login(self.requester)
+
+        doc_response = self.client.get(reverse("doc_request_create"))
+        maint_response = self.client.get(reverse("maint_request_create"))
+
+        self.assertEqual(doc_response.status_code, 200)
+        self.assertEqual(maint_response.status_code, 200)
+
+    def test_executor_does_not_see_create_shortcuts(self):
+        self.client.force_login(self.executor)
+
+        dashboard_response = self.client.get(reverse("dashboard"))
+        doc_list_response = self.client.get(reverse("doc_request_list"))
+        maint_list_response = self.client.get(reverse("maint_request_list"))
+
+        self.assertNotContains(dashboard_response, reverse("doc_request_create"))
+        self.assertNotContains(dashboard_response, reverse("maint_request_create"))
+        self.assertNotContains(dashboard_response, reverse("jadwal_tayang_create"))
+        self.assertNotContains(doc_list_response, reverse("doc_request_create"))
+        self.assertNotContains(maint_list_response, reverse("maint_request_create"))
 
 
 @override_settings(ALLOWED_HOSTS=["testserver", "localhost"])
@@ -497,6 +549,7 @@ class TakeoutNotificationTests(TestCase):
         TakeoutAlertRule.objects.all().delete()
         cls.warning_rule = TakeoutAlertRule.objects.create(
             name="H-1 Warning",
+            trigger_direction=TakeoutAlertRule.TriggerDirection.BEFORE,
             offset_unit=TakeoutAlertRule.OffsetUnit.DAY,
             offset_value=1,
             urgency=TakeoutAlertRule.Urgency.WARNING,
@@ -504,6 +557,7 @@ class TakeoutNotificationTests(TestCase):
         )
         cls.urgent_rule = TakeoutAlertRule.objects.create(
             name="Jam-6 Urgent",
+            trigger_direction=TakeoutAlertRule.TriggerDirection.BEFORE,
             offset_unit=TakeoutAlertRule.OffsetUnit.HOUR,
             offset_value=6,
             urgency=TakeoutAlertRule.Urgency.URGENT,
@@ -570,13 +624,80 @@ class TakeoutNotificationTests(TestCase):
         self.assertEqual(payload["count"], 0)
         self.assertEqual(payload["urgent_count"], 0)
 
+    def test_after_takeout_rule_only_appears_after_trigger_time(self):
+        TakeoutAlertRule.objects.all().delete()
+        TakeoutAlertRule.objects.create(
+            name="Jam+2 Warning",
+            trigger_direction=TakeoutAlertRule.TriggerDirection.AFTER,
+            offset_unit=TakeoutAlertRule.OffsetUnit.HOUR,
+            offset_value=2,
+            urgency=TakeoutAlertRule.Urgency.WARNING,
+            is_active=True,
+        )
+        future_jadwal = self.create_jadwal_tayang(takeout_in_hours=1)
+        past_jadwal = self.create_jadwal_tayang(takeout_in_hours=-3)
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("notification_summary"), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["urgent_count"], 0)
+        self.assertIn("Jam+2 Warning", payload["html"])
+        self.assertIn("Sudah lewat", payload["html"])
+        self.assertIn(reverse("jadwal_tayang_detail", args=[past_jadwal.pk]), payload["html"])
+        self.assertNotIn(reverse("jadwal_tayang_detail", args=[future_jadwal.pk]), payload["html"])
+
+    def test_before_takeout_rule_stops_after_takeout_time(self):
+        TakeoutAlertRule.objects.all().delete()
+        TakeoutAlertRule.objects.create(
+            name="Jam-1 Warning",
+            trigger_direction=TakeoutAlertRule.TriggerDirection.BEFORE,
+            offset_unit=TakeoutAlertRule.OffsetUnit.HOUR,
+            offset_value=1,
+            urgency=TakeoutAlertRule.Urgency.WARNING,
+            is_active=True,
+        )
+        overdue_jadwal = self.create_jadwal_tayang(takeout_in_hours=-1)
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("notification_summary"), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["count"], 0)
+        self.assertNotIn(reverse("jadwal_tayang_detail", args=[overdue_jadwal.pk]), payload["html"])
+
+    def test_zero_hour_after_takeout_rule_can_trigger_immediately(self):
+        TakeoutAlertRule.objects.all().delete()
+        TakeoutAlertRule.objects.create(
+            name="Jam+0 Warning",
+            trigger_direction=TakeoutAlertRule.TriggerDirection.AFTER,
+            offset_unit=TakeoutAlertRule.OffsetUnit.HOUR,
+            offset_value=0,
+            urgency=TakeoutAlertRule.Urgency.WARNING,
+            is_active=True,
+        )
+        jadwal_tayang = self.create_jadwal_tayang(takeout_in_hours=0)
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("notification_summary"), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["count"], 1)
+        self.assertIn("Jam+0 Warning", payload["html"])
+        self.assertIn(reverse("jadwal_tayang_detail", args=[jadwal_tayang.pk]), payload["html"])
+
     def test_admin_can_create_takeout_alert_rule(self):
         self.client.force_login(self.admin)
 
         response = self.client.post(
             reverse("takeout_alert_rule_create"),
             data={
-                "name": "Jam-2 Warning",
+                "name": "Jam+2 Warning",
+                "trigger_direction": TakeoutAlertRule.TriggerDirection.AFTER,
                 "offset_unit": TakeoutAlertRule.OffsetUnit.HOUR,
                 "offset_value": 2,
                 "urgency": TakeoutAlertRule.Urgency.WARNING,
@@ -585,7 +706,31 @@ class TakeoutNotificationTests(TestCase):
             HTTP_X_REQUESTED_WITH="XMLHttpRequest",
         )
 
-        created_rule = TakeoutAlertRule.objects.get(name="Jam-2 Warning")
+        created_rule = TakeoutAlertRule.objects.get(name="Jam+2 Warning")
         self.assertEqual(response.status_code, 200)
         self.assertJSONEqual(response.content, {"success": True})
         self.assertEqual(created_rule.lead_minutes, 120)
+        self.assertEqual(created_rule.trigger_direction, TakeoutAlertRule.TriggerDirection.AFTER)
+        self.assertEqual(created_rule.offset_display(), "Jam+2")
+
+    def test_admin_can_create_zero_offset_takeout_alert_rule(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            reverse("takeout_alert_rule_create"),
+            data={
+                "name": "Jam+0 Warning",
+                "trigger_direction": TakeoutAlertRule.TriggerDirection.AFTER,
+                "offset_unit": TakeoutAlertRule.OffsetUnit.HOUR,
+                "offset_value": 0,
+                "urgency": TakeoutAlertRule.Urgency.WARNING,
+                "is_active": "on",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        created_rule = TakeoutAlertRule.objects.get(name="Jam+0 Warning")
+        self.assertEqual(response.status_code, 200)
+        self.assertJSONEqual(response.content, {"success": True})
+        self.assertEqual(created_rule.lead_minutes, 0)
+        self.assertEqual(created_rule.offset_display(), "Jam+0")

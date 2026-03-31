@@ -109,6 +109,7 @@
   <div class="col-lg-12">
     <div class="section-title">Quick Actions</div>
     <div class="row g-3">
+      {% if can_create_requests %}
       <div class="col-4">
         <a href="{% url 'doc_request_create' %}" class="quick-action-btn">
           <i class="bi bi-plus-circle"></i>
@@ -127,6 +128,7 @@
           <span class="small fw-semibold">New Jadwal Tayang</span>
         </a>
       </div>
+      {% endif %}
       <div class="col-4">
         <a href="{% url 'doc_request_list' %}" class="quick-action-btn">
           <i class="bi bi-list-ul"></i>

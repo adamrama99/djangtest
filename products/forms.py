@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.utils import timezone
 from .models import (
     DocumentationRequest,
     MaintenanceRequest,
@@ -126,6 +127,10 @@ class JadwalTayangForm(forms.ModelForm):
         for field_name in ("tanggal_tayang", "tanggal_takeout"):
             self.fields[field_name].input_formats = ["%Y-%m-%dT%H:%M"]
             self.fields[field_name].widget.format = "%Y-%m-%dT%H:%M"
+            if not self.is_bound and self.instance and self.instance.pk:
+                value = getattr(self.instance, field_name, None)
+                if value:
+                    self.initial[field_name] = timezone.localtime(value).strftime("%Y-%m-%dT%H:%M")
 
 
 class JadwalTayangEditForm(JadwalTayangForm):
@@ -148,11 +153,12 @@ class JadwalTayangEditForm(JadwalTayangForm):
 class TakeoutAlertRuleForm(forms.ModelForm):
     class Meta:
         model = TakeoutAlertRule
-        fields = ["name", "offset_unit", "offset_value", "urgency", "is_active"]
+        fields = ["name", "trigger_direction", "offset_unit", "offset_value", "urgency", "is_active"]
         widgets = {
-            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Contoh: H-1 Warning"}),
+            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Contoh: H-1 Warning atau Jam+2 Urgent"}),
+            "trigger_direction": forms.Select(attrs={"class": "form-select"}),
             "offset_unit": forms.Select(attrs={"class": "form-select"}),
-            "offset_value": forms.NumberInput(attrs={"class": "form-control", "min": 1}),
+            "offset_value": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
             "urgency": forms.Select(attrs={"class": "form-select"}),
             "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
@@ -160,14 +166,15 @@ class TakeoutAlertRuleForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["name"].help_text = "Nama aturan untuk memudahkan identifikasi."
-        self.fields["offset_unit"].help_text = "Pilih apakah trigger dihitung dalam hari atau jam sebelum takeout."
-        self.fields["offset_value"].help_text = "Isi 1 untuk H-1, atau 6 untuk Jam-6."
+        self.fields["trigger_direction"].help_text = "Pilih apakah rule aktif sebelum atau sesudah waktu takeout."
+        self.fields["offset_unit"].help_text = "Pilih apakah trigger dihitung dalam hari atau jam."
+        self.fields["offset_value"].help_text = "Isi 0 untuk tepat di waktu takeout, 1 untuk H-1/H+1, atau 6 untuk Jam-6/Jam+6."
         self.fields["urgency"].help_text = "Urgent akan muncul di bell dan popup berulang."
 
     def clean_offset_value(self):
         value = self.cleaned_data["offset_value"]
-        if value < 1:
-            raise forms.ValidationError("Nilai offset minimal 1.")
+        if value < 0:
+            raise forms.ValidationError("Nilai offset minimal 0.")
         return value
 
 

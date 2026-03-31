@@ -31,7 +31,7 @@ def _format_relative_time(now, target):
     return f"{prefix} {' '.join(parts[:2])}"
 
 
-def _format_takeout_message(now, target):
+def _format_duration_phrase(now, target):
     delta = target - now
     total_minutes = max(1, int(abs(delta.total_seconds()) // 60))
     days, remainder = divmod(total_minutes, 1440)
@@ -47,8 +47,14 @@ def _format_takeout_message(now, target):
     elif minutes and not days:
         parts.append(f"{minutes} menit")
 
-    phrase = " ".join(parts[:2])
-    if delta.total_seconds() < 0:
+    return " ".join(parts[:2])
+
+
+def _format_takeout_message(now, target, rule):
+    phrase = _format_duration_phrase(now, target)
+    if rule.trigger_direction == TakeoutAlertRule.TriggerDirection.AFTER:
+        return f"Sudah lewat {phrase} dari waktu takeout. Harus segera di takeout."
+    if target - now < timedelta(0):
         return f"Waktu takeout sudah lewat {phrase}. Harus segera di takeout."
     return f"{phrase} lagi harus di takeout."
 
@@ -78,15 +84,23 @@ def get_active_takeout_notifications(limit=None):
     for jadwal_tayang in jadwal_list:
         brand, lokasi_label, jadwal_label = _jadwal_label(jadwal_tayang)
         time_status = _format_relative_time(now, jadwal_tayang.tanggal_takeout)
-        takeout_message = _format_takeout_message(now, jadwal_tayang.tanggal_takeout)
 
         for rule in rules:
-            trigger_at = jadwal_tayang.tanggal_takeout - timedelta(minutes=rule.lead_minutes)
+            if rule.trigger_direction == TakeoutAlertRule.TriggerDirection.AFTER:
+                trigger_at = jadwal_tayang.tanggal_takeout + timedelta(minutes=rule.lead_minutes)
+            else:
+                trigger_at = jadwal_tayang.tanggal_takeout - timedelta(minutes=rule.lead_minutes)
             if now < trigger_at:
+                continue
+            if (
+                rule.trigger_direction == TakeoutAlertRule.TriggerDirection.BEFORE
+                and now >= jadwal_tayang.tanggal_takeout
+            ):
                 continue
 
             is_urgent = rule.urgency == TakeoutAlertRule.Urgency.URGENT
             urgency_label = rule.get_urgency_display()
+            takeout_message = _format_takeout_message(now, jadwal_tayang.tanggal_takeout, rule)
             notifications.append(
                 {
                     "key": f"{jadwal_tayang.pk}-{rule.pk}",

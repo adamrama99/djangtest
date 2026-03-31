@@ -264,6 +264,7 @@ def dashboard(request):
         "recent_docs": recent_docs,
         "recent_maints": recent_maints,
         "recent_jt": recent_jt,
+        "can_create_requests": _is_requester(request.user) or _is_admin(request.user),
     })
 
 
@@ -298,10 +299,11 @@ def doc_request_list(request):
     return render(request, "products/request_list.html", {
         "requests": requests,
         "all_dokumentators": Dokumentator.objects.all().order_by("name"),
+        "can_create_requests": _is_requester(request.user) or _is_admin(request.user),
     })
 
 
-@login_required
+@requester_or_admin_required
 def doc_request_create(request):
     form = DocumentationRequestForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
@@ -639,10 +641,11 @@ def maint_request_list(request):
     return render(request, "products/maint_request_list.html", {
         "requests": requests_qs,
         "all_dokumentators": Dokumentator.objects.all().order_by("name"),
+        "can_create_requests": _is_requester(request.user) or _is_admin(request.user),
     })
 
 
-@login_required
+@requester_or_admin_required
 def maint_request_create(request):
     form = MaintenanceRequestForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():

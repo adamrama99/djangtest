@@ -5,7 +5,7 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div>
     <h3 class="mb-0"><i class="bi bi-bell-fill me-2"></i>Aturan Notifikasi Takeout</h3>
-    <p class="text-muted mb-0 small">Kelola kapan warning dan urgent muncul sebelum takeout.</p>
+    <p class="text-muted mb-0 small">Kelola kapan warning dan urgent muncul sebelum atau sesudah takeout.</p>
   </div>
   <button type="button" class="btn btn-primary" onclick="loadModal('{% url 'takeout_alert_rule_create' %}')">
     <i class="bi bi-plus-lg me-1"></i> Add Rule
@@ -38,6 +38,7 @@
           <td class="fw-semibold">{{ rule.name }}</td>
           <td>
             <span class="badge text-bg-secondary">{{ rule.offset_display }}</span>
+            <div class="small text-muted mt-1">{{ rule.get_trigger_direction_display }}</div>
           </td>
           <td>
             <span class="badge text-bg-{% if rule.urgency == 'URGENT' %}danger{% else %}warning{% endif %}">

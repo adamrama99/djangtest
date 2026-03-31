@@ -350,6 +350,10 @@ class JadwalTayangFotoTakeout(models.Model):
 
 
 class TakeoutAlertRule(models.Model):
+    class TriggerDirection(models.TextChoices):
+        BEFORE = "BEFORE", "Sebelum Takeout"
+        AFTER = "AFTER", "Sesudah Takeout"
+
     class OffsetUnit(models.TextChoices):
         DAY = "DAY", "Hari"
         HOUR = "HOUR", "Jam"
@@ -359,6 +363,11 @@ class TakeoutAlertRule(models.Model):
         URGENT = "URGENT", "Urgent"
 
     name = models.CharField(max_length=150, unique=True)
+    trigger_direction = models.CharField(
+        max_length=10,
+        choices=TriggerDirection.choices,
+        default=TriggerDirection.BEFORE,
+    )
     offset_unit = models.CharField(max_length=10, choices=OffsetUnit.choices)
     offset_value = models.PositiveIntegerField()
     lead_minutes = models.PositiveIntegerField(default=0, editable=False)
@@ -381,9 +390,10 @@ class TakeoutAlertRule(models.Model):
         super().save(*args, **kwargs)
 
     def offset_display(self):
+        sign = "-" if self.trigger_direction == self.TriggerDirection.BEFORE else "+"
         if self.offset_unit == self.OffsetUnit.DAY:
-            return f"H-{self.offset_value}"
-        return f"Jam-{self.offset_value}"
+            return f"H{sign}{self.offset_value}"
+        return f"Jam{sign}{self.offset_value}"
 
 
 @receiver(m2m_changed, sender=DocumentationRequest.lokasi.through)
