@@ -33,5 +33,20 @@ urlpatterns = [
     path("master/<slug:slug>/<int:pk>/edit/", views.master_data_edit, name="master_data_edit"),
     path("master/<slug:slug>/<int:pk>/delete/", views.master_data_delete, name="master_data_delete"),
 
+    # Jadwal Tayang
+    path("jadwal-tayang/", views.jadwal_tayang_list, name="jadwal_tayang_list"),
+    path("jadwal-tayang/create/", views.jadwal_tayang_create, name="jadwal_tayang_create"),
+    path("jadwal-tayang/<int:pk>/", views.jadwal_tayang_detail, name="jadwal_tayang_detail"),
+    path("jadwal-tayang/<int:pk>/delete/", views.jadwal_tayang_delete, name="jadwal_tayang_delete"),
+    path("jadwal-tayang/<int:pk>/status/", views.jadwal_tayang_update_status, name="jadwal_tayang_update_status"),
+    path("jadwal-tayang/<int:pk>/pelaksana/", views.jadwal_tayang_update_pelaksana, name="jadwal_tayang_update_pelaksana"),
+    path("jadwal-tayang/<int:pk>/upload-photos/", views.jadwal_tayang_upload_photos, name="jadwal_tayang_upload_photos"),
+
+    # User Management (Admin Only)
+    path("users/", views.user_list, name="user_list"),
+    path("users/create/", views.user_create, name="user_create"),
+    path("users/<int:pk>/edit/", views.user_edit, name="user_edit"),
+    path("users/<int:pk>/delete/", views.user_delete, name="user_delete"),
+
     path("", views.dashboard, name="dashboard"),
 ]

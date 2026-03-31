@@ -1,0 +1,125 @@
+﻿py : Creating test 
+database for alias 
+'default' 
+('test_djangtest')...
+At line:1 char:1
++ py manage.py test 
+products -v2 2>&1 | 
+Out-File -Encoding 
+utf8 d:\code ...
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (Creating test   
+  d..._djangtest').    
+..:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+
+Found 6 test(s).
+Operations to perform:
+  Synchronize unmigrated apps: messages, staticfiles
+  Apply all migrations: admin, auth, contenttypes, products, sessions
+Synchronizing apps without migrations:
+  Creating tables...
+    Running deferred SQL...
+Running migrations:
+  Applying contenttypes.0001_initial... OK
+  Applying auth.0001_initial... OK
+  Applying admin.0001_initial... OK
+  Applying admin.0002_logentry_remove_auto_add... OK
+  Applying admin.0003_logentry_add_action_flag_choices... OK
+  Applying contenttypes.0002_remove_content_type_name... OK
+  Applying auth.0002_alter_permission_name_max_length... OK
+  Applying auth.0003_alter_user_email_max_length... OK
+  Applying auth.0004_alter_user_username_opts... OK
+  Applying auth.0005_alter_user_last_login_null... OK
+  Applying auth.0006_require_contenttypes_0002... OK
+  Applying auth.0007_alter_validators_add_error_messages... OK
+  Applying auth.0008_alter_user_username_max_length... OK
+  Applying auth.0009_alter_user_last_name_max_length... OK
+  Applying auth.0010_alter_group_name_max_length... OK
+  Applying auth.0011_update_proxy_permissions... OK
+  Applying auth.0012_alter_user_first_name_max_length... OK
+  Applying products.0001_initial... OK
+  Applying products.0002_cameratype... OK
+  Applying products.0003_ledtype_requirement_viewphoto_documentationrequest... OK
+  Applying products.0004_remove_documentationrequest_email_and_more... OK
+  Applying products.0005_delete_product... OK
+  Applying products.0006_documentationrequest_status... OK
+  Applying products.0007_brandmateri_lokasi_data_migration... OK
+  Applying products.0008_dokumentator_alter_documentationrequest_brand_materi_and_more... OK
+  Applying products.0009_edithistory... OK
+  Applying products.0010_namaperangkat_inventoryitem_maintenancerequest... OK
+  Applying products.0011_alter_maintenancerequest_foto_kerusakan... OK
+  Applying products.0012_maintenancerequest_pelaksana... OK
+  Applying products.0013_documentationrequest_jenis_lokasi_and_more... OK
+  Applying products.0014_documentationrequestlokasiassignment_and_more... OK
+  Applying products.0015_auto_set_jenis_lokasi_from_lokasi_count... OK
+  Applying products.0016_remove_documentationrequest_jenis_lokasi... OK
+  Applying products.0017_jadwaltayang_jadwaltayangbuktiplaylist_and_more... OK
+test_admin_can_assign_p
+elaksana_per_location (
+products.tests.Document
+ationRequestMultiLokasi
+Tests.test_admin_can_as
+sign_pelaksana_per_loca
+tion) ... ok
+test_create_view_splits
+_selected_locations_int
+o_multiple_requests (pr
+oducts.tests.Documentat
+ionRequestMultiLokasiTe
+sts.test_create_view_sp
+lits_selected_locations
+_into_multiple_requests
+) ... ok
+test_dashboard_list_and
+_detail_pages_render_wi
+th_multi_lokasi (produc
+ts.tests.DocumentationR
+equestMultiLokasiTests.
+test_dashboard_list_and
+_detail_pages_render_wi
+th_multi_lokasi) ... ok
+test_detail_page_shows_
+assignment_per_location
+ (products.tests.Docume
+ntationRequestMultiLoka
+siTests.test_detail_pag
+e_shows_assignment_per_
+location) ... ok
+test_form_valid_with_mu
+ltiple_selected_locatio
+ns (products.tests.Docu
+mentationRequestMultiLo
+kasiTests.test_form_val
+id_with_multiple_select
+ed_locations) ... ok
+test_lokasi_assignments
+_created_when_locations
+_are_set (products.test
+s.DocumentationRequestM
+ultiLokasiTests.test_lo
+kasi_assignments_create
+d_when_locations_are_se
+t) ... ok
+
+-----------------------
+-----------------------
+-----------------------
+-
+Ran 6 tests in 1.270s
+
+OK
+Destroying test 
+database for alias 
+'default' 
+('test_djangtest')...
+
+  Applying sessions.0001_initial... OK
+System check identified no issues (0 silenced).

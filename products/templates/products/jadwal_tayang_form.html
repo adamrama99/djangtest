@@ -1,0 +1,229 @@
+{% extends "layouts/base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-section-title {
+        border-bottom: 2px solid #198754;
+        padding-bottom: 5px;
+        margin-bottom: 15px;
+        color: #198754;
+        font-weight: bold;
+    }
+
+    .choice-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 10px;
+        background: rgba(0, 0, 0, 0.02);
+        padding: 15px;
+        border-radius: 8px;
+        border: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+    [data-bs-theme="dark"] .choice-grid {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .form-check {
+        margin-bottom: 0;
+        padding-top: 5px;
+        padding-bottom: 5px;
+    }
+
+    .form-check-label {
+        cursor: pointer;
+        font-weight: normal !important;
+    }
+
+    .field-container {
+        margin-bottom: 25px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h3 class="mb-0">{{ title }}</h3>
+    <p class="text-muted mb-0">Buat jadwal tayang untuk materi LED.</p>
+</div>
+
+<div class="row">
+    <div class="col-lg-10 col-xl-9 mx-auto">
+        <div class="card card-success card-outline shadow">
+            <div class="card-header bg-transparent border-bottom">
+                <h3 class="card-title mb-0">
+                    <i class="bi bi-calendar-event me-2 text-success"></i>Formulir Jadwal Tayang
+                </h3>
+            </div>
+
+            <form method="post" novalidate>
+                {% csrf_token %}
+                <div class="card-body">
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.tanggal_tayang.id_for_label }}" class="form-label fw-bold">
+                                Tanggal Tayang <span class="text-danger">*</span>
+                            </label>
+                            {{ form.tanggal_tayang }}
+                            {% if form.tanggal_tayang.errors %}
+                            <div class="text-danger small mt-1">{% for error in form.tanggal_tayang.errors %}{{ error }}{% endfor %}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.tanggal_takeout.id_for_label }}" class="form-label fw-bold">
+                                Tanggal Takeout <span class="text-danger">*</span>
+                            </label>
+                            {{ form.tanggal_takeout }}
+                            {% if form.tanggal_takeout.errors %}
+                            <div class="text-danger small mt-1">{% for error in form.tanggal_takeout.errors %}{{ error }}{% endfor %}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.pic_pemohon.id_for_label }}" class="form-label fw-bold">
+                                PIC Pemohon <span class="text-danger">*</span>
+                            </label>
+                            {{ form.pic_pemohon }}
+                            {% if form.pic_pemohon.errors %}
+                            <div class="text-danger small mt-1">{% for error in form.pic_pemohon.errors %}{{ error }}{% endfor %}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-lg-5 mb-3">
+                            <label for="{{ form.brand_materi.id_for_label }}" class="form-label fw-bold">
+                                Brand / Materi <span class="text-danger">*</span>
+                            </label>
+                            {{ form.brand_materi }}
+                            {% if form.brand_materi.errors %}
+                            <div class="text-danger small mt-1">{% for error in form.brand_materi.errors %}{{ error }}{% endfor %}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-lg-7 mb-3">
+                            <label for="{{ form.lokasi.id_for_label }}" class="form-label fw-bold">
+                                Lokasi <span class="text-danger">*</span>
+                            </label>
+                            {{ form.lokasi }}
+                            <div class="text-muted small mt-1"><i class="bi bi-info-circle me-1"></i>Pilih satu atau beberapa lokasi. Sistem akan membuat satu jadwal terpisah per lokasi.</div>
+                            {% if form.lokasi.errors %}
+                            <div class="text-danger small mt-1">{% for error in form.lokasi.errors %}{{ error }}{% endfor %}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <hr class="my-4 opacity-25">
+
+                    <!-- Jenis Produk -->
+                    <div class="field-container">
+                        <label class="form-label fw-bold mb-2">Jenis Produk <span class="text-danger">*</span></label>
+                        <div class="choice-grid">
+                            {% for radio in form.jenis_led %}
+                            <div class="form-check">
+                                {{ radio.tag }}
+                                <label class="form-check-label" for="{{ radio.id_for_label }}">
+                                    {{ radio.choice_label }}
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% if form.jenis_led.errors %}
+                        <div class="text-danger small mt-1">{% for error in form.jenis_led.errors %}{{ error }}{% endfor %}</div>
+                        {% endif %}
+                    </div>
+
+                    <hr class="my-4 opacity-25">
+
+                    <div class="mb-3">
+                        <label for="{{ form.note_requester.id_for_label }}" class="form-label fw-bold">Note Requester</label>
+                        {{ form.note_requester }}
+                        {% if form.note_requester.errors %}
+                        <div class="text-danger small mt-1">{% for error in form.note_requester.errors %}{{ error }}{% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                </div>
+
+                <div class="card-footer bg-transparent border-top d-flex gap-2">
+                    <button type="submit" class="btn btn-success px-4">
+                        <i class="bi bi-send-fill me-1"></i> Submit
+                    </button>
+                    <a href="{% url 'jadwal_tayang_list' %}" class="btn btn-secondary px-4">
+                        <i class="bi bi-x-lg me-1"></i> Cancel
+                    </a>
+                </div>
+            </form>
+
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function initJadwalTayangFormSelect2() {
+    const $brand = $('#id_brand_materi');
+    if ($brand.length) {
+      $brand.select2({
+        theme: 'bootstrap-5',
+        placeholder: 'Pilih Brand / Materi...',
+        allowClear: true,
+        width: '100%',
+      });
+    }
+
+    const $lokasi = $('#id_lokasi');
+    if ($lokasi.length) {
+      $lokasi.select2({
+        theme: 'bootstrap-5',
+        placeholder: 'Pilih satu atau beberapa lokasi...',
+        allowClear: true,
+        width: '100%',
+        tags: true,
+        closeOnSelect: false,
+        createTag: function(params) {
+          const term = $.trim(params.term);
+          if (term === '') return null;
+          return { id: '_new_' + term, text: term, newTag: true };
+        },
+        templateResult: function(data) {
+          if (data.newTag) {
+            return $('<span><i class="bi bi-plus-circle me-1 text-success"></i>Tambah: <strong>' + data.text + '</strong></span>');
+          }
+          return data.text;
+        },
+      });
+
+      $lokasi.on('select2:select', function(e) {
+        const data = e.params.data;
+        if (data.id && data.id.toString().startsWith('_new_')) {
+          const csrfToken = document.querySelector('form [name=csrfmiddlewaretoken]')?.value;
+          $.ajax({
+            url: '{% url "ajax_create_lokasi" %}',
+            method: 'POST',
+            data: { name: data.text, csrfmiddlewaretoken: csrfToken },
+            success: function(resp) {
+              if (resp.success) {
+                $lokasi.find('option[value="' + data.id + '"]').remove();
+                $lokasi.append(new Option(resp.name, resp.id, true, true)).trigger('change');
+              }
+            },
+            error: function() {
+              alert('Gagal menambahkan lokasi baru.');
+            }
+          });
+        }
+      });
+    }
+  }
+
+  $(initJadwalTayangFormSelect2);
+</script>
+{% endblock %}

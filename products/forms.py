@@ -1,5 +1,9 @@
 from django import forms
-from .models import DocumentationRequest, MaintenanceRequest, InventoryItem
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from .models import DocumentationRequest, MaintenanceRequest, InventoryItem, JadwalTayang
+
+User = get_user_model()
 
 
 class DocumentationRequestForm(forms.ModelForm):
@@ -83,3 +87,75 @@ class MasterDataForm(forms.Form):
             "placeholder": "Enter name",
         }),
     )
+
+
+class JadwalTayangForm(forms.ModelForm):
+    class Meta:
+        model = JadwalTayang
+        fields = [
+            "brand_materi",
+            "lokasi",
+            "jenis_led",
+            "tanggal_tayang",
+            "tanggal_takeout",
+            "note_requester",
+            "pic_pemohon",
+        ]
+        widgets = {
+            "brand_materi": forms.Select(attrs={"class": "form-select select2-field"}),
+            "lokasi": forms.SelectMultiple(attrs={"class": "form-select select2-field select2-tags", "multiple": "multiple"}),
+            "jenis_led": forms.RadioSelect(attrs={"class": "form-check-input"}),
+            "tanggal_tayang": forms.DateTimeInput(attrs={"class": "form-control", "type": "datetime-local"}),
+            "tanggal_takeout": forms.DateTimeInput(attrs={"class": "form-control", "type": "datetime-local"}),
+            "note_requester": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Catatan dari pemohon..."}),
+            "pic_pemohon": forms.TextInput(attrs={"class": "form-control", "placeholder": "Nama / Divisi Pemohon"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["brand_materi"].queryset = self.fields["brand_materi"].queryset.order_by("name")
+        self.fields["lokasi"].queryset = self.fields["lokasi"].queryset.order_by("name")
+        self.fields["jenis_led"].queryset = self.fields["jenis_led"].queryset.order_by("name")
+
+
+class UserForm(forms.ModelForm):
+    password = forms.CharField(
+        required=False,
+        widget=forms.PasswordInput(attrs={"class": "form-control", "placeholder": "Leave blank to keep current password"}),
+        help_text="Kosongkan jika tidak ingin mengubah password.",
+    )
+    groups = forms.ModelMultipleChoiceField(
+        queryset=Group.objects.all(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
+        label="Role",
+    )
+
+    class Meta:
+        model = User
+        fields = ["username", "first_name", "last_name", "email", "is_active", "groups"]
+        widgets = {
+            "username": forms.TextInput(attrs={"class": "form-control", "placeholder": "Username"}),
+            "first_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "First name"}),
+            "last_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Last name"}),
+            "email": forms.EmailInput(attrs={"class": "form-control", "placeholder": "email@example.com"}),
+            "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            self.fields["password"].help_text = "Kosongkan jika tidak ingin mengubah password."
+        else:
+            self.fields["password"].required = True
+            self.fields["password"].widget.attrs["placeholder"] = "Enter password"
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        password = self.cleaned_data.get("password")
+        if password:
+            user.set_password(password)
+        if commit:
+            user.save()
+            self.save_m2m()
+        return user

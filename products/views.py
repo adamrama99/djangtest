@@ -7,9 +7,13 @@ from .models import (
     DocumentationRequest, LEDType, Requirement, ViewPhoto, cameratype,
     BrandMateri, Lokasi, Dokumentator, DocumentationRequestLokasiAssignment, EditHistory,
     MaintenanceRequest, NamaPerangkat, InventoryItem,
+    JadwalTayang, JadwalTayangFotoTayang, JadwalTayangBuktiPlaylist, JadwalTayangFotoTakeout,
 )
-from .forms import DocumentationRequestForm, MasterDataForm, MaintenanceRequestForm
+from .forms import DocumentationRequestForm, MasterDataForm, MaintenanceRequestForm, JadwalTayangForm, UserForm
 from django.core.paginator import Paginator
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 
 def _is_ajax(request):
@@ -19,6 +23,16 @@ def _is_ajax(request):
 def _is_admin(user):
     """Check if user is in the 'admin' group or is a superuser."""
     return user.is_superuser or user.groups.filter(name="admin").exists()
+
+
+def _is_requester(user):
+    """Check if user is in the 'requester' group."""
+    return user.groups.filter(name="requester").exists()
+
+
+def _is_executor(user):
+    """Check if user is in the 'executor' group."""
+    return user.groups.filter(name="executor").exists()
 
 
 def _doc_request_label(doc_request):
@@ -37,13 +51,42 @@ def _doc_request_label(doc_request):
     return label
 
 
+def _forbidden_response(request, message="Anda tidak memiliki izin untuk mengakses halaman ini."):
+    """Render a proper 403 page with back button."""
+    from django.template.response import TemplateResponse
+    response = TemplateResponse(request, "products/403.html", {"message": message}, status=403)
+    return response
+
+
 def admin_required(view_func):
     """Decorator that restricts access to admin group only."""
     @wraps(view_func)
     @login_required
     def wrapper(request, *args, **kwargs):
         if not _is_admin(request.user):
-            return HttpResponseForbidden("Access denied. Admin only.")
+            return _forbidden_response(request, "Halaman ini hanya bisa diakses oleh Admin.")
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
+def requester_or_admin_required(view_func):
+    """Decorator that restricts access to requester or admin."""
+    @wraps(view_func)
+    @login_required
+    def wrapper(request, *args, **kwargs):
+        if not (_is_admin(request.user) or _is_requester(request.user)):
+            return _forbidden_response(request, "Halaman ini hanya bisa diakses oleh Requester atau Admin.")
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
+def executor_or_admin_required(view_func):
+    """Decorator that restricts access to executor or admin."""
+    @wraps(view_func)
+    @login_required
+    def wrapper(request, *args, **kwargs):
+        if not (_is_admin(request.user) or _is_executor(request.user)):
+            return _forbidden_response(request, "Halaman ini hanya bisa diakses oleh Executor atau Admin.")
         return view_func(request, *args, **kwargs)
     return wrapper
 
@@ -55,12 +98,15 @@ def dashboard(request):
     if _is_admin(request.user):
         doc_qs = DocumentationRequest.objects.all()
         maint_qs = MaintenanceRequest.objects.all()
+        jt_qs = JadwalTayang.objects.all()
     else:
         doc_qs = DocumentationRequest.objects.filter(submitted_by=request.user)
         maint_qs = MaintenanceRequest.objects.filter(submitted_by=request.user)
+        jt_qs = JadwalTayang.objects.filter(submitted_by=request.user)
 
     total_requests = doc_qs.count()
     total_maint = maint_qs.count()
+    total_jt = jt_qs.count()
 
     # Per-status counts
     doc_todo = doc_qs.filter(status='TODO').count()
@@ -71,6 +117,10 @@ def dashboard(request):
     maint_progress = maint_qs.filter(status='IN_PROGRESS').count()
     maint_done = maint_qs.filter(status='DONE').count()
 
+    jt_todo = jt_qs.filter(status='BELUM_TAYANG').count()
+    jt_progress = jt_qs.filter(status='SEDANG_TAYANG').count()
+    jt_done = jt_qs.filter(status='SUDAH_TAKEOUT').count()
+
     # Recent items
     recent_docs = doc_qs.select_related(
         'brand_materi', 'jenis_led', 'submitted_by'
@@ -80,18 +130,26 @@ def dashboard(request):
     recent_maints = maint_qs.select_related(
         'submitted_by'
     ).order_by('-created_at')[:5]
+    recent_jt = jt_qs.select_related(
+        'brand_materi', 'jenis_led', 'submitted_by'
+    ).prefetch_related('lokasi').order_by('-created_at')[:5]
 
     return render(request, "products/dashboard.html", {
         "total_requests": total_requests,
         "total_maint": total_maint,
+        "total_jt": total_jt,
         "doc_todo": doc_todo,
         "doc_progress": doc_progress,
         "doc_done": doc_done,
         "maint_todo": maint_todo,
         "maint_progress": maint_progress,
         "maint_done": maint_done,
+        "jt_todo": jt_todo,
+        "jt_progress": jt_progress,
+        "jt_done": jt_done,
         "recent_docs": recent_docs,
         "recent_maints": recent_maints,
+        "recent_jt": recent_jt,
     })
 
 
@@ -277,7 +335,7 @@ MASTER_DATA_REGISTRY = {
     "brand-materi": {"model": BrandMateri, "label": "Brand / Materi", "icon": "bi-tag"},
     "lokasi": {"model": Lokasi, "label": "Lokasi", "icon": "bi-geo-alt"},
     "dokumentator": {"model": Dokumentator, "label": "Dokumentator", "icon": "bi-person-video3"},
-    "led-type": {"model": LEDType, "label": "Jenis LED", "icon": "bi-lightbulb"},
+    "led-type": {"model": LEDType, "label": "Jenis Produk", "icon": "bi-lightbulb"},
     "requirement": {"model": Requirement, "label": "Requirement", "icon": "bi-check2-square"},
     "view-photo": {"model": ViewPhoto, "label": "View Photo", "icon": "bi-camera"},
     "camera-type": {"model": cameratype, "label": "Jenis Kamera", "icon": "bi-webcam"},
@@ -447,3 +505,196 @@ def maint_request_update_pelaksana(request, pk):
         maint_request.pelaksana.set(pelaksana_ids)
         return JsonResponse({"success": True})
     return HttpResponseForbidden("POST only.")
+
+
+# --- Jadwal Tayang Views ---
+
+@login_required
+def jadwal_tayang_list(request):
+    if _is_admin(request.user) or _is_executor(request.user):
+        qs = JadwalTayang.objects.select_related(
+            "brand_materi", "jenis_led", "submitted_by"
+        ).prefetch_related("lokasi", "pelaksana").all()
+    else:
+        qs = JadwalTayang.objects.select_related(
+            "brand_materi", "jenis_led", "submitted_by"
+        ).prefetch_related("lokasi", "pelaksana").filter(
+            submitted_by=request.user
+        )
+    return render(request, "products/jadwal_tayang_list.html", {
+        "requests": qs,
+        "all_dokumentators": Dokumentator.objects.all().order_by("name"),
+        "is_requester": _is_requester(request.user),
+        "is_executor": _is_executor(request.user),
+        "is_admin": _is_admin(request.user),
+    })
+
+
+@requester_or_admin_required
+def jadwal_tayang_create(request):
+    form = JadwalTayangForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        lokasi_list = list(form.cleaned_data["lokasi"])
+        with transaction.atomic():
+            for lokasi in lokasi_list:
+                jt = JadwalTayang.objects.create(
+                    submitted_by=request.user,
+                    brand_materi=form.cleaned_data["brand_materi"],
+                    jenis_led=form.cleaned_data["jenis_led"],
+                    tanggal_tayang=form.cleaned_data["tanggal_tayang"],
+                    tanggal_takeout=form.cleaned_data["tanggal_takeout"],
+                    note_requester=form.cleaned_data["note_requester"],
+                    pic_pemohon=form.cleaned_data["pic_pemohon"],
+                )
+                jt.lokasi.set([lokasi])
+        return redirect("jadwal_tayang_list")
+    return render(request, "products/jadwal_tayang_form.html", {
+        "form": form,
+        "title": "Buat Jadwal Tayang",
+    })
+
+
+@login_required
+def jadwal_tayang_detail(request, pk):
+    jt = get_object_or_404(
+        JadwalTayang.objects.select_related(
+            "submitted_by", "brand_materi", "jenis_led"
+        ).prefetch_related(
+            "lokasi", "pelaksana",
+            "foto_tayang_set", "foto_takeout_set",
+        ),
+        pk=pk,
+    )
+    if not _is_admin(request.user) and not _is_executor(request.user) and jt.submitted_by != request.user:
+        return HttpResponseForbidden("Access denied.")
+
+    # Get bukti playlist if exists
+    try:
+        bukti_playlist = jt.bukti_playlist
+    except JadwalTayangBuktiPlaylist.DoesNotExist:
+        bukti_playlist = None
+
+    return render(request, "products/jadwal_tayang_detail.html", {
+        "jt": jt,
+        "bukti_playlist": bukti_playlist,
+        "is_requester": _is_requester(request.user),
+        "is_executor": _is_executor(request.user),
+        "is_admin": _is_admin(request.user),
+    })
+
+
+@admin_required
+def jadwal_tayang_delete(request, pk):
+    jt = get_object_or_404(JadwalTayang, pk=pk)
+    if request.method == "POST":
+        jt.delete()
+        return redirect("jadwal_tayang_list")
+    return render(request, "products/jadwal_tayang_delete.html", {"request_obj": jt})
+
+
+@executor_or_admin_required
+def jadwal_tayang_update_status(request, pk):
+    if request.method == "POST":
+        jt = get_object_or_404(JadwalTayang, pk=pk)
+        new_status = request.POST.get("status", "")
+        valid = [c[0] for c in JadwalTayang.STATUS_CHOICES]
+        if new_status in valid:
+            jt.status = new_status
+            jt.save(update_fields=["status"])
+            return JsonResponse({"success": True, "status": new_status})
+        return JsonResponse({"success": False, "error": "Invalid status"}, status=400)
+    return HttpResponseForbidden("POST only.")
+
+
+@admin_required
+def jadwal_tayang_update_pelaksana(request, pk):
+    if request.method == "POST":
+        jt = get_object_or_404(JadwalTayang, pk=pk)
+        pelaksana_ids = request.POST.getlist("pelaksana[]")
+        jt.pelaksana.set(pelaksana_ids)
+        return JsonResponse({"success": True})
+    return HttpResponseForbidden("POST only.")
+
+
+@executor_or_admin_required
+def jadwal_tayang_upload_photos(request, pk):
+    """Executor/Admin upload photos & notes for a Jadwal Tayang."""
+    jt = get_object_or_404(JadwalTayang, pk=pk)
+
+    if request.method == "POST":
+        # Save executor notes
+        note_executor = request.POST.get("note_executor", "").strip()
+        if note_executor:
+            jt.note_executor = note_executor
+            jt.save(update_fields=["note_executor"])
+
+        # Foto Tayang (multiple)
+        for f in request.FILES.getlist("foto_tayang"):
+            JadwalTayangFotoTayang.objects.create(jadwal_tayang=jt, foto=f)
+
+        # Bukti Playlist (pagi, siang, malam) — delete old files
+        foto_pagi = request.FILES.get("foto_playlist_pagi")
+        foto_siang = request.FILES.get("foto_playlist_siang")
+        foto_malam = request.FILES.get("foto_playlist_malam")
+        if foto_pagi or foto_siang or foto_malam:
+            bukti, _ = JadwalTayangBuktiPlaylist.objects.get_or_create(jadwal_tayang=jt)
+            if foto_pagi:
+                if bukti.foto_pagi and bukti.foto_pagi.storage.exists(bukti.foto_pagi.name):
+                    bukti.foto_pagi.delete(save=False)
+                bukti.foto_pagi = foto_pagi
+            if foto_siang:
+                if bukti.foto_siang and bukti.foto_siang.storage.exists(bukti.foto_siang.name):
+                    bukti.foto_siang.delete(save=False)
+                bukti.foto_siang = foto_siang
+            if foto_malam:
+                if bukti.foto_malam and bukti.foto_malam.storage.exists(bukti.foto_malam.name):
+                    bukti.foto_malam.delete(save=False)
+                bukti.foto_malam = foto_malam
+            bukti.save()
+
+        # Foto Takeout (multiple)
+        for f in request.FILES.getlist("foto_takeout"):
+            JadwalTayangFotoTakeout.objects.create(jadwal_tayang=jt, foto=f)
+
+        # Auto-update status based on photos
+        jt.auto_update_status()
+
+        return redirect("jadwal_tayang_detail", pk=pk)
+
+    return redirect("jadwal_tayang_detail", pk=pk)
+
+
+# --- User Management (Admin Only) ---
+
+@admin_required
+def user_list(request):
+    users = User.objects.all().prefetch_related("groups").order_by("username")
+    return render(request, "products/user_list.html", {"users": users})
+
+
+@admin_required
+def user_create(request):
+    form = UserForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        return redirect("user_list")
+    return render(request, "products/user_form.html", {"form": form, "title": "Create User"})
+
+
+@admin_required
+def user_edit(request, pk):
+    user_obj = get_object_or_404(User, pk=pk)
+    form = UserForm(request.POST or None, instance=user_obj)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        return redirect("user_list")
+    return render(request, "products/user_form.html", {"form": form, "title": f"Edit User: {user_obj.username}"})
+
+
+@admin_required
+def user_delete(request, pk):
+    user_obj = get_object_or_404(User, pk=pk)
+    if request.method == "POST":
+        user_obj.delete()
+        return redirect("user_list")
+    return render(request, "products/user_delete.html", {"user_obj": user_obj})

@@ -74,7 +74,40 @@
           </ul>
         </li>
 
+        <!-- Jadwal Tayang -->
+        <li
+          class="nav-item {% if request.resolver_match.url_name in 'jadwal_tayang_list,jadwal_tayang_create,jadwal_tayang_detail,jadwal_tayang_delete' %}menu-open{% endif %}">
+          <a href="#"
+            class="nav-link {% if request.resolver_match.url_name in 'jadwal_tayang_list,jadwal_tayang_create,jadwal_tayang_detail,jadwal_tayang_delete' %}active{% endif %}">
+            <i class="nav-icon bi bi-calendar-event"></i>
+            <p>
+              Jadwal Tayang
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview">
+            <li class="nav-item">
+              <a href="{% url 'jadwal_tayang_list' %}"
+                class="nav-link {% if request.resolver_match.url_name == 'jadwal_tayang_list' %}active{% endif %}">
+                <i class="nav-icon bi bi-list-ul"></i>
+                <p>All Jadwal</p>
+              </a>
+            </li>
+          </ul>
+        </li>
+
         {% if user.is_superuser or user.groups.all.0.name == "admin" %}
+
+        <li class="nav-header">ADMIN</li>
+
+        <li class="nav-item">
+          <a href="{% url 'user_list' %}"
+            class="nav-link {% if request.resolver_match.url_name in 'user_list,user_create,user_edit,user_delete' %}active{% endif %}">
+            <i class="nav-icon bi bi-people"></i>
+            <p>User Management</p>
+          </a>
+        </li>
+
         <li class="nav-item">
           <a href="{% url 'edit_history_list' %}"
             class="nav-link {% if request.resolver_match.url_name == 'edit_history_list' %}active{% endif %}">
@@ -82,9 +115,7 @@
             <p>Edit History</p>
           </a>
         </li>
-        {% endif %}
 
-        {% if user.is_superuser or user.groups.all.0.name == "admin" %}
         <!-- Master Data (Admin Only) -->
         <li class="nav-header">MASTER DATA</li>
 
@@ -120,7 +151,7 @@
             <li class="nav-item">
               <a href="{% url 'master_data_list' 'led-type' %}" class="nav-link">
                 <i class="nav-icon bi bi-lightbulb"></i>
-                <p>Jenis LED</p>
+                <p>Jenis Produk</p>
               </a>
             </li>
             <li class="nav-item">

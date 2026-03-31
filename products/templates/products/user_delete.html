@@ -1,0 +1,35 @@
+{% extends "layouts/base.html" %}
+{% block title %}Delete User{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-4">
+    <div class="col-md-6">
+        <div class="card card-danger card-outline">
+            <div class="card-header">
+                <h3 class="card-title mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Confirm Deletion</h3>
+            </div>
+            <div class="card-body">
+                <p>Are you sure you want to delete this user?</p>
+                <div class="alert alert-secondary">
+                    <strong>{{ user_obj.username }}</strong>
+                    {% if user_obj.get_full_name %} ({{ user_obj.get_full_name }}){% endif %}<br>
+                    <small class="text-muted">{{ user_obj.email|default:"No email" }}</small>
+                </div>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    This action cannot be undone. All requests submitted by this user will also be affected.
+                </div>
+            </div>
+            <div class="card-footer d-flex gap-2">
+                <form method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash me-1"></i> Yes, Delete
+                    </button>
+                </form>
+                <a href="{% url 'user_list' %}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
