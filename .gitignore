@@ -1,0 +1,11 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+*.sqlite3
+media/
+staticfiles/
+test_output.txt
+test_err.txt
+terr.log
+*.bak

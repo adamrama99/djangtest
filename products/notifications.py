@@ -112,7 +112,7 @@ def get_active_takeout_notifications(limit=None):
                     "urgency": rule.urgency,
                     "urgency_label": urgency_label,
                     "urgency_class": "danger" if is_urgent else "warning",
-                    "title": f"{urgency_label}: {brand}",
+                    "title": f"{urgency_label}: {brand  }",
                     "message": f"Takeout {jadwal_label}. {takeout_message}",
                     "jadwal_label": jadwal_label,
                     "lokasi_label": lokasi_label,
