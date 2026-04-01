@@ -53,9 +53,9 @@ def _format_duration_phrase(now, target):
 def _format_takeout_message(now, target, rule):
     phrase = _format_duration_phrase(now, target)
     if rule.trigger_direction == TakeoutAlertRule.TriggerDirection.AFTER:
-        return f"Sudah lewat {phrase} dari waktu takeout. Harus segera di takeout."
+        return f"Sudah lewat {phrase} dari waktu takeout. Harap segera di takeout."
     if target - now < timedelta(0):
-        return f"Waktu takeout sudah lewat {phrase}. Harus segera di takeout."
+        return f"Waktu takeout sudah lewat {phrase}. Harap segera di takeout."
     return f"{phrase} lagi harus di takeout."
 
 

@@ -3,6 +3,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponseForbidden
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
+from django.db.models import Q
 from django.template.loader import render_to_string
 from django.utils import timezone
 from .models import (
@@ -78,6 +79,38 @@ def _jadwal_tayang_label(jadwal_tayang):
 def _joined_names(queryset, empty_label="Belum ditentukan"):
     names = list(queryset.order_by("name").values_list("name", flat=True))
     return ", ".join(names) if names else empty_label
+
+
+def _get_search_query(request):
+    return request.GET.get("q", "").strip()
+
+
+def _search_context(request, placeholder):
+    params = request.GET.copy()
+    params.pop("page", None)
+    search_query = _get_search_query(request)
+    return {
+        "search_query": search_query,
+        "search_active": bool(search_query),
+        "search_placeholder": placeholder,
+        "page_query": params.urlencode(),
+    }
+
+
+def _pk_search_q(search_query):
+    if search_query.isdigit():
+        return Q(pk=int(search_query))
+    return Q(pk__isnull=True)
+
+
+def _contains_search_value(search_query, *values):
+    normalized_query = search_query.casefold()
+    for value in values:
+        if value is None:
+            continue
+        if normalized_query in str(value).casefold():
+            return True
+    return False
 
 
 def _get_or_create_dokumentator_for_user(user):
@@ -272,6 +305,7 @@ def dashboard(request):
 
 @login_required
 def doc_request_list(request):
+    search_query = _get_search_query(request)
     if _is_admin(request.user):
         requests = DocumentationRequest.objects.select_related(
             "brand_materi", "jenis_led", "submitted_by"
@@ -296,10 +330,26 @@ def doc_request_list(request):
         ).filter(
             submitted_by=request.user
         ).order_by("-id")
+    if search_query:
+        requests = requests.filter(
+            _pk_search_q(search_query)
+            | Q(brand_materi__name__icontains=search_query)
+            | Q(lokasi__name__icontains=search_query)
+            | Q(jenis_led__name__icontains=search_query)
+            | Q(requirements__name__icontains=search_query)
+            | Q(jenis_kamera__name__icontains=search_query)
+            | Q(note__icontains=search_query)
+            | Q(pic_pemohon__icontains=search_query)
+            | Q(status__icontains=search_query)
+            | Q(submitted_by__username__icontains=search_query)
+            | Q(submitted_by__first_name__icontains=search_query)
+            | Q(submitted_by__last_name__icontains=search_query)
+        ).distinct()
     return render(request, "products/request_list.html", {
         "requests": requests,
         "all_dokumentators": Dokumentator.objects.all().order_by("name"),
         "can_create_requests": _is_requester(request.user) or _is_admin(request.user),
+        **_search_context(request, "Cari brand, lokasi, PIC, requirement, kamera, atau user"),
     })
 
 
@@ -451,16 +501,53 @@ def ajax_create_lokasi(request):
 
 @admin_required
 def edit_history_list(request):
+    search_query = _get_search_query(request)
     history_qs = EditHistory.objects.select_related("user").all()
+    if search_query:
+        history_qs = history_qs.filter(
+            _pk_search_q(search_query)
+            | Q(action__icontains=search_query)
+            | Q(request_type__icontains=search_query)
+            | Q(doc_request_label__icontains=search_query)
+            | Q(field_name__icontains=search_query)
+            | Q(old_value__icontains=search_query)
+            | Q(new_value__icontains=search_query)
+            | Q(user__username__icontains=search_query)
+            | Q(user__first_name__icontains=search_query)
+            | Q(user__last_name__icontains=search_query)
+        ).distinct()
     paginator = Paginator(history_qs, 25)
     page = request.GET.get("page")
     history = paginator.get_page(page)
-    return render(request, "products/edit_history.html", {"history": history})
+    return render(request, "products/edit_history.html", {
+        "history": history,
+        **_search_context(request, "Cari user, aksi, jenis request, field, atau isi perubahan"),
+    })
 
 
 @login_required
 def notification_list(request):
     notifications = get_active_takeout_notifications()
+    search_query = _get_search_query(request)
+    if search_query:
+        notifications = [
+            notification
+            for notification in notifications
+            if _contains_search_value(
+                search_query,
+                notification["rule_name"],
+                notification["urgency_label"],
+                notification["offset_display"],
+                notification["jadwal_label"],
+                notification["lokasi_label"],
+                notification["message"],
+                notification["takeout_at_display"],
+                notification["time_status"],
+                notification["title"],
+                notification["jadwal_tayang_id"],
+                notification["rule_id"],
+            )
+        ]
     paginator = Paginator(notifications, 20)
     page = request.GET.get("page")
     notification_page = paginator.get_page(page)
@@ -474,6 +561,7 @@ def notification_list(request):
             "notification_total": len(notifications),
             "urgent_count": urgent_count,
             "warning_count": warning_count,
+            **_search_context(request, "Cari rule, urgency, jadwal, lokasi, atau status waktu"),
         },
     )
 
@@ -507,8 +595,20 @@ def notification_summary(request):
 
 @admin_required
 def takeout_alert_rule_list(request):
+    search_query = _get_search_query(request)
     rules = TakeoutAlertRule.objects.all()
-    return render(request, "products/takeout_alert_rule_list.html", {"rules": rules})
+    if search_query:
+        rules = rules.filter(
+            _pk_search_q(search_query)
+            | Q(name__icontains=search_query)
+            | Q(trigger_direction__icontains=search_query)
+            | Q(offset_unit__icontains=search_query)
+            | Q(urgency__icontains=search_query)
+        ).distinct()
+    return render(request, "products/takeout_alert_rule_list.html", {
+        "rules": rules,
+        **_search_context(request, "Cari nama rule, trigger, offset, atau urgency"),
+    })
 
 
 @admin_required
@@ -566,12 +666,18 @@ def master_data_list(request, slug):
     config = MASTER_DATA_REGISTRY.get(slug)
     if not config:
         return HttpResponseForbidden("Not found.")
+    search_query = _get_search_query(request)
     items = config["model"].objects.all().order_by("name")
+    if search_query:
+        items = items.filter(
+            _pk_search_q(search_query) | Q(name__icontains=search_query)
+        ).distinct()
     return render(request, "products/master_data_list.html", {
         "items": items,
         "config": config,
         "slug": slug,
         "registry": MASTER_DATA_REGISTRY,
+        **_search_context(request, f"Cari {config['label']}"),
     })
 
 
@@ -628,6 +734,7 @@ def master_data_delete(request, slug, pk):
 
 @login_required
 def maint_request_list(request):
+    search_query = _get_search_query(request)
     if _is_admin(request.user):
         requests_qs = MaintenanceRequest.objects.select_related(
             "submitted_by"
@@ -638,10 +745,25 @@ def maint_request_list(request):
         ).prefetch_related("nama_perangkat", "inventory_items", "pelaksana").filter(
             submitted_by=request.user
         ).order_by("-id")
+    if search_query:
+        requests_qs = requests_qs.filter(
+            _pk_search_q(search_query)
+            | Q(nama_pemohon__icontains=search_query)
+            | Q(departement__icontains=search_query)
+            | Q(deskripsi_pekerjaan__icontains=search_query)
+            | Q(status__icontains=search_query)
+            | Q(submitted_by__username__icontains=search_query)
+            | Q(submitted_by__first_name__icontains=search_query)
+            | Q(submitted_by__last_name__icontains=search_query)
+            | Q(nama_perangkat__name__icontains=search_query)
+            | Q(inventory_items__name__icontains=search_query)
+            | Q(pelaksana__name__icontains=search_query)
+        ).distinct()
     return render(request, "products/maint_request_list.html", {
         "requests": requests_qs,
         "all_dokumentators": Dokumentator.objects.all().order_by("name"),
         "can_create_requests": _is_requester(request.user) or _is_admin(request.user),
+        **_search_context(request, "Cari pemohon, departement, perangkat, inventory, atau dokumentator"),
     })
 
 
@@ -730,15 +852,32 @@ def maint_request_update_pelaksana(request, pk):
 
 @login_required
 def jadwal_tayang_list(request):
+    search_query = _get_search_query(request)
     qs = JadwalTayang.objects.select_related(
         "brand_materi", "jenis_led", "submitted_by"
     ).prefetch_related("lokasi", "pelaksana").all()
+    if search_query:
+        qs = qs.filter(
+            _pk_search_q(search_query)
+            | Q(brand_materi__name__icontains=search_query)
+            | Q(lokasi__name__icontains=search_query)
+            | Q(jenis_led__name__icontains=search_query)
+            | Q(note_requester__icontains=search_query)
+            | Q(note_executor__icontains=search_query)
+            | Q(pic_pemohon__icontains=search_query)
+            | Q(status__icontains=search_query)
+            | Q(submitted_by__username__icontains=search_query)
+            | Q(submitted_by__first_name__icontains=search_query)
+            | Q(submitted_by__last_name__icontains=search_query)
+            | Q(pelaksana__name__icontains=search_query)
+        ).distinct()
     return render(request, "products/jadwal_tayang_list.html", {
         "requests": qs,
         "all_dokumentators": Dokumentator.objects.all().order_by("name"),
         "is_requester": _is_requester(request.user),
         "is_executor": _is_executor(request.user),
         "is_admin": _is_admin(request.user),
+        **_search_context(request, "Cari brand, lokasi, PIC, notes, pelaksana, atau user"),
     })
 
 
@@ -1068,8 +1207,21 @@ def jadwal_tayang_upload_photos(request, pk):
 
 @admin_required
 def user_list(request):
+    search_query = _get_search_query(request)
     users = User.objects.all().prefetch_related("groups").order_by("username")
-    return render(request, "products/user_list.html", {"users": users})
+    if search_query:
+        users = users.filter(
+            _pk_search_q(search_query)
+            | Q(username__icontains=search_query)
+            | Q(first_name__icontains=search_query)
+            | Q(last_name__icontains=search_query)
+            | Q(email__icontains=search_query)
+            | Q(groups__name__icontains=search_query)
+        ).distinct()
+    return render(request, "products/user_list.html", {
+        "users": users,
+        **_search_context(request, "Cari username, nama, email, atau role"),
+    })
 
 
 @admin_required

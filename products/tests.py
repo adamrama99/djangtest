@@ -16,10 +16,12 @@ from .models import (
     DocumentationRequestLokasiAssignment,
     Dokumentator,
     EditHistory,
+    MaintenanceRequest,
     JadwalTayang,
     JadwalTayangFotoTakeout,
     LEDType,
     Lokasi,
+    NamaPerangkat,
     Requirement,
     TakeoutAlertRule,
     ViewPhoto,
@@ -515,6 +517,208 @@ class JadwalTayangVisibilityTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["total_jt"], 1)
+
+
+@override_settings(ALLOWED_HOSTS=["testserver", "localhost"])
+class ListSearchTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = get_user_model().objects.create_superuser(
+            username="search_admin",
+            email="search_admin@example.com",
+            password="password123",
+        )
+        cls.user = get_user_model().objects.create_user(
+            username="search_user",
+            first_name="Sari",
+            last_name="Lookup",
+            email="sari.lookup@example.com",
+            password="password123",
+        )
+
+        cls.brand_alpha = BrandMateri.objects.create(name="Brand Search Alpha")
+        cls.brand_beta = BrandMateri.objects.create(name="Brand Search Beta")
+        cls.lokasi_target = Lokasi.objects.create(name="Lokasi Search Target")
+        cls.lokasi_other = Lokasi.objects.create(name="Lokasi Search Other")
+        cls.led_type = LEDType.objects.create(name="LED Search")
+        cls.requirement = Requirement.objects.create(name="Requirement Search")
+        cls.view_photo = ViewPhoto.objects.create(name="View Search")
+        cls.camera_type = cameratype.objects.create(name="Camera Search")
+        cls.dokumentator = Dokumentator.objects.create(name="Dokumentator Search")
+        cls.nama_perangkat_target = NamaPerangkat.objects.create(name="Panel Search Target")
+        cls.nama_perangkat_other = NamaPerangkat.objects.create(name="Panel Search Other")
+
+        cls.doc_request_target = DocumentationRequest.objects.create(
+            submitted_by=cls.user,
+            brand_materi=cls.brand_alpha,
+            jenis_led=cls.led_type,
+            tanggal=date.today(),
+            note="Catatan alpha",
+            pic_pemohon="PIC Alpha",
+        )
+        cls.doc_request_target.lokasi.set([cls.lokasi_target])
+        cls.doc_request_target.requirements.set([cls.requirement])
+        cls.doc_request_target.view_photo.set([cls.view_photo])
+        cls.doc_request_target.jenis_kamera.set([cls.camera_type])
+
+        cls.doc_request_other = DocumentationRequest.objects.create(
+            submitted_by=cls.admin,
+            brand_materi=cls.brand_beta,
+            jenis_led=cls.led_type,
+            tanggal=date.today(),
+            note="Catatan beta",
+            pic_pemohon="PIC Beta",
+        )
+        cls.doc_request_other.lokasi.set([cls.lokasi_other])
+        cls.doc_request_other.requirements.set([cls.requirement])
+        cls.doc_request_other.view_photo.set([cls.view_photo])
+        cls.doc_request_other.jenis_kamera.set([cls.camera_type])
+
+        cls.maint_request_target = MaintenanceRequest.objects.create(
+            submitted_by=cls.user,
+            nama_pemohon="Budi Search",
+            departement="Engineering Search",
+            tanggal_permintaan=date.today(),
+            tanggal_deadline=date.today() + timedelta(days=1),
+            deskripsi_pekerjaan="Perbaikan panel target",
+        )
+        cls.maint_request_target.nama_perangkat.set([cls.nama_perangkat_target])
+        cls.maint_request_target.pelaksana.set([cls.dokumentator])
+
+        cls.maint_request_other = MaintenanceRequest.objects.create(
+            submitted_by=cls.admin,
+            nama_pemohon="Andi Other",
+            departement="Finance Other",
+            tanggal_permintaan=date.today(),
+            tanggal_deadline=date.today() + timedelta(days=2),
+            deskripsi_pekerjaan="Perbaikan panel other",
+        )
+        cls.maint_request_other.nama_perangkat.set([cls.nama_perangkat_other])
+
+        start_at = timezone.now()
+        cls.jadwal_target = JadwalTayang.objects.create(
+            submitted_by=cls.admin,
+            brand_materi=cls.brand_alpha,
+            jenis_led=cls.led_type,
+            tanggal_tayang=start_at,
+            tanggal_takeout=start_at + timedelta(minutes=30),
+            note_requester="Request search target",
+            pic_pemohon="PIC Search Jadwal",
+        )
+        cls.jadwal_target.lokasi.set([cls.lokasi_target])
+        cls.jadwal_target.pelaksana.set([cls.dokumentator])
+
+        cls.jadwal_other = JadwalTayang.objects.create(
+            submitted_by=cls.user,
+            brand_materi=cls.brand_beta,
+            jenis_led=cls.led_type,
+            tanggal_tayang=start_at,
+            tanggal_takeout=start_at + timedelta(days=2),
+            note_requester="Request other jadwal",
+            pic_pemohon="PIC Other Jadwal",
+        )
+        cls.jadwal_other.lokasi.set([cls.lokasi_other])
+
+        EditHistory.objects.create(
+            user=cls.admin,
+            request_type=EditHistory.RequestType.DOC_REQUEST,
+            action="UPDATE",
+            doc_request_id=cls.doc_request_target.pk,
+            doc_request_label="Label Search History",
+            field_name="PIC Search Field",
+            old_value="Sebelum search",
+            new_value="Sesudah search",
+        )
+        EditHistory.objects.create(
+            user=cls.user,
+            request_type=EditHistory.RequestType.JADWAL_TAYANG,
+            action="CREATE",
+            doc_request_id=cls.jadwal_other.pk,
+            doc_request_label="Label Other History",
+            field_name="Notes Other Field",
+            old_value="",
+            new_value="Other value",
+        )
+
+        cls.warning_rule = TakeoutAlertRule.objects.create(
+            name="Search Warning Rule",
+            trigger_direction=TakeoutAlertRule.TriggerDirection.BEFORE,
+            offset_unit=TakeoutAlertRule.OffsetUnit.HOUR,
+            offset_value=6,
+            urgency=TakeoutAlertRule.Urgency.WARNING,
+            is_active=True,
+        )
+        cls.urgent_rule = TakeoutAlertRule.objects.create(
+            name="Search Urgent Rule",
+            trigger_direction=TakeoutAlertRule.TriggerDirection.BEFORE,
+            offset_unit=TakeoutAlertRule.OffsetUnit.HOUR,
+            offset_value=1,
+            urgency=TakeoutAlertRule.Urgency.URGENT,
+            is_active=True,
+        )
+
+    def setUp(self):
+        self.client.force_login(self.admin)
+
+    def test_doc_request_list_search_filters_results(self):
+        response = self.client.get(reverse("doc_request_list"), {"q": "Alpha"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Brand Search Alpha")
+        self.assertNotContains(response, "Brand Search Beta")
+
+    def test_maintenance_request_list_search_filters_results(self):
+        response = self.client.get(reverse("maint_request_list"), {"q": "Engineering Search"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Engineering Search")
+        self.assertNotContains(response, "Finance Other")
+
+    def test_jadwal_tayang_list_search_filters_results(self):
+        response = self.client.get(reverse("jadwal_tayang_list"), {"q": "Lokasi Search Target"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Lokasi Search Target")
+        self.assertNotContains(response, "Lokasi Search Other")
+
+    def test_master_data_list_search_filters_results(self):
+        response = self.client.get(reverse("master_data_list", args=["lokasi"]), {"q": "Target"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Lokasi Search Target")
+        self.assertNotContains(response, "Lokasi Search Other")
+
+    def test_user_list_search_filters_results(self):
+        response = self.client.get(reverse("user_list"), {"q": "sari.lookup"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "sari.lookup@example.com")
+        self.assertQuerySetEqual(
+            response.context["users"].values_list("username", flat=True),
+            ["search_user"],
+            transform=lambda value: value,
+        )
+
+    def test_edit_history_list_search_filters_results(self):
+        response = self.client.get(reverse("edit_history_list"), {"q": "PIC Search Field"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "PIC Search Field")
+        self.assertNotContains(response, "Notes Other Field")
+
+    def test_notification_list_search_filters_results(self):
+        response = self.client.get(reverse("notification_list"), {"q": "Urgent Rule"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Search Urgent Rule")
+        self.assertNotContains(response, "Search Warning Rule")
+
+    def test_takeout_alert_rule_list_search_filters_results(self):
+        response = self.client.get(reverse("takeout_alert_rule_list"), {"q": "Warning Rule"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Search Warning Rule")
+        self.assertNotContains(response, "Search Urgent Rule")
 
 
 @override_settings(ALLOWED_HOSTS=["testserver", "localhost"])
