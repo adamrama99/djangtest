@@ -46,6 +46,13 @@
         font-weight: 600;
         margin-bottom: 16px;
     }
+    .request-reference-thumb {
+        max-width: 100%;
+        max-height: 220px;
+        object-fit: cover;
+        border-radius: 8px;
+        border: 1px solid rgba(0, 0, 0, .08);
+    }
 </style>
 {% endblock %}
 
@@ -137,6 +144,28 @@
                 <hr class="opacity-25">
                 <div class="detail-label">Notes Requester</div>
                 <div class="detail-value">{{ jt.note_requester|default:"-"|linebreaksbr }}</div>
+
+                <div class="detail-label">Foto Referensi Requester</div>
+                <div class="detail-value">
+                    {% if jt.foto_referensi_requester %}
+                    <a href="{{ jt.foto_referensi_requester.url }}" target="_blank">
+                        <img src="{{ jt.foto_referensi_requester.url }}" alt="Foto Referensi Requester" class="request-reference-thumb">
+                    </a>
+                    {% else %}
+                    -
+                    {% endif %}
+                </div>
+
+                <div class="detail-label">Link Foto Google Drive</div>
+                <div class="detail-value">
+                    {% if jt.link_foto_drive_requester %}
+                    <a href="{{ jt.link_foto_drive_requester }}" target="_blank" rel="noopener noreferrer">
+                        {{ jt.link_foto_drive_requester }}
+                    </a>
+                    {% else %}
+                    -
+                    {% endif %}
+                </div>
 
                 <div class="detail-label">Notes Executor</div>
                 <div class="detail-value">{{ jt.note_executor|default:"-"|linebreaksbr }}</div>

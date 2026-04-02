@@ -1,3 +1,4 @@
+import os
 from functools import wraps
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponseForbidden
@@ -239,6 +240,12 @@ def _format_datetime_for_history(value):
     return timezone.localtime(value).strftime("%d/%m/%Y %H:%M")
 
 
+def _format_file_for_history(field_file):
+    if not field_file or not getattr(field_file, "name", ""):
+        return "-"
+    return os.path.basename(field_file.name)
+
+
 def _jadwal_tayang_edit_snapshot(jadwal_tayang):
     return {
         "Brand / Materi": jadwal_tayang.brand_materi.name if jadwal_tayang.brand_materi else "-",
@@ -248,6 +255,8 @@ def _jadwal_tayang_edit_snapshot(jadwal_tayang):
         "Tanggal Takeout": _format_datetime_for_history(jadwal_tayang.tanggal_takeout),
         "PIC Pemohon": jadwal_tayang.pic_pemohon or "-",
         "Notes Requester": jadwal_tayang.note_requester or "-",
+        "Foto Referensi Requester": _format_file_for_history(jadwal_tayang.foto_referensi_requester),
+        "Link Foto Google Drive": jadwal_tayang.link_foto_drive_requester or "-",
     }
 
 
@@ -939,6 +948,7 @@ def jadwal_tayang_list(request):
             | Q(jenis_led__name__icontains=search_query)
             | Q(note_requester__icontains=search_query)
             | Q(note_executor__icontains=search_query)
+            | Q(link_foto_drive_requester__icontains=search_query)
             | Q(pic_pemohon__icontains=search_query)
             | Q(status__icontains=search_query)
             | Q(submitted_by__username__icontains=search_query)
@@ -979,6 +989,7 @@ def jadwal_tayang_report(request):
             | Q(jenis_led__name__icontains=search_query)
             | Q(note_requester__icontains=search_query)
             | Q(note_executor__icontains=search_query)
+            | Q(link_foto_drive_requester__icontains=search_query)
             | Q(pic_pemohon__icontains=search_query)
             | Q(submitted_by__username__icontains=search_query)
             | Q(submitted_by__first_name__icontains=search_query)
@@ -999,20 +1010,27 @@ def jadwal_tayang_report(request):
 
 @requester_or_admin_required
 def jadwal_tayang_create(request):
-    form = JadwalTayangForm(request.POST or None)
+    form = JadwalTayangForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
         lokasi_list = list(form.cleaned_data["lokasi"])
+        foto_referensi_requester = form.cleaned_data.get("foto_referensi_requester")
         with transaction.atomic():
             for lokasi in lokasi_list:
-                jt = JadwalTayang.objects.create(
+                if foto_referensi_requester and hasattr(foto_referensi_requester, "seek"):
+                    foto_referensi_requester.seek(0)
+                jt = JadwalTayang(
                     submitted_by=request.user,
                     brand_materi=form.cleaned_data["brand_materi"],
                     jenis_led=form.cleaned_data["jenis_led"],
                     tanggal_tayang=form.cleaned_data["tanggal_tayang"],
                     tanggal_takeout=form.cleaned_data["tanggal_takeout"],
                     note_requester=form.cleaned_data["note_requester"],
+                    link_foto_drive_requester=form.cleaned_data["link_foto_drive_requester"],
                     pic_pemohon=form.cleaned_data["pic_pemohon"],
                 )
+                if foto_referensi_requester:
+                    jt.foto_referensi_requester = foto_referensi_requester
+                jt.save()
                 jt.lokasi.set([lokasi])
                 _create_edit_history(
                     user=request.user,
@@ -1035,7 +1053,7 @@ def jadwal_tayang_edit(request, pk):
         JadwalTayang.objects.select_related("brand_materi", "jenis_led").prefetch_related("lokasi"),
         pk=pk,
     )
-    form = JadwalTayangEditForm(request.POST or None, instance=jt)
+    form = JadwalTayangEditForm(request.POST or None, request.FILES or None, instance=jt)
     old_values = _jadwal_tayang_edit_snapshot(jt) if request.method == "POST" else None
     if request.method == "POST" and form.is_valid():
         with transaction.atomic():

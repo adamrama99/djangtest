@@ -107,6 +107,8 @@ class JadwalTayangForm(forms.ModelForm):
             "tanggal_tayang",
             "tanggal_takeout",
             "note_requester",
+            "foto_referensi_requester",
+            "link_foto_drive_requester",
             "pic_pemohon",
         ]
         widgets = {
@@ -116,6 +118,8 @@ class JadwalTayangForm(forms.ModelForm):
             "tanggal_tayang": forms.DateTimeInput(attrs={"class": "form-control", "type": "datetime-local"}),
             "tanggal_takeout": forms.DateTimeInput(attrs={"class": "form-control", "type": "datetime-local"}),
             "note_requester": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Catatan dari pemohon..."}),
+            "foto_referensi_requester": forms.ClearableFileInput(attrs={"class": "form-control", "accept": "image/*"}),
+            "link_foto_drive_requester": forms.URLInput(attrs={"class": "form-control", "placeholder": "https://drive.google.com/..."}),
             "pic_pemohon": forms.TextInput(attrs={"class": "form-control", "placeholder": "Nama / Divisi Pemohon"}),
         }
 
@@ -131,6 +135,15 @@ class JadwalTayangForm(forms.ModelForm):
                 value = getattr(self.instance, field_name, None)
                 if value:
                     self.initial[field_name] = timezone.localtime(value).strftime("%Y-%m-%dT%H:%M")
+        self.fields["foto_referensi_requester"].required = False
+        self.fields["link_foto_drive_requester"].required = False
+        self.fields["link_foto_drive_requester"].help_text = "Opsional. Isi link share Google Drive atau link referensi foto lainnya."
+
+    def clean_foto_referensi_requester(self):
+        foto = self.cleaned_data.get("foto_referensi_requester")
+        if foto and hasattr(foto, "size") and foto.size > 10 * 1024 * 1024:
+            raise forms.ValidationError("Ukuran file maksimal 10 MB.")
+        return foto
 
 
 class JadwalTayangEditForm(JadwalTayangForm):

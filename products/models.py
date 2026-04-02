@@ -257,6 +257,16 @@ class JadwalTayang(models.Model):
     tanggal_tayang = models.DateTimeField("Tanggal Tayang")
     tanggal_takeout = models.DateTimeField("Tanggal Takeout")
     note_requester = models.TextField("Notes Requester", blank=True)
+    foto_referensi_requester = models.ImageField(
+        "Foto Referensi Requester",
+        upload_to="jadwal_tayang/requester/",
+        blank=True,
+        null=True,
+    )
+    link_foto_drive_requester = models.URLField(
+        "Link Foto Google Drive",
+        blank=True,
+    )
     note_executor = models.TextField("Notes Executor", blank=True)
     pic_pemohon = models.CharField("PIC Pemohon", max_length=150)
     pelaksana = models.ManyToManyField(

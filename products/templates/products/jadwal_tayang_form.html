@@ -64,7 +64,7 @@
                 </h3>
             </div>
 
-            <form method="post" novalidate>
+            <form method="post" enctype="multipart/form-data" novalidate>
                 {% csrf_token %}
                 <div class="card-body">
 
@@ -161,6 +161,51 @@
                         <div class="text-danger small mt-1">{% for error in form.note_requester.errors %}{{ error }}{% endfor %}
                         </div>
                         {% endif %}
+                    </div>
+
+                    <div class="row">
+                        <div class="col-lg-6 mb-3">
+                            <label for="{{ form.foto_referensi_requester.id_for_label }}" class="form-label fw-bold">
+                                Foto Referensi Requester
+                            </label>
+                            {{ form.foto_referensi_requester }}
+                            {% if form.foto_referensi_requester.help_text %}
+                            <div class="form-text">{{ form.foto_referensi_requester.help_text }}</div>
+                            {% endif %}
+                            {% if form.foto_referensi_requester.errors %}
+                            <div class="text-danger small mt-1">
+                                {% for error in form.foto_referensi_requester.errors %}{{ error }}{% endfor %}
+                            </div>
+                            {% endif %}
+                            {% if is_edit and jadwal_tayang.foto_referensi_requester %}
+                            <div class="mt-2">
+                                <a href="{{ jadwal_tayang.foto_referensi_requester.url }}" target="_blank" class="btn btn-sm btn-outline-info">
+                                    <i class="bi bi-image me-1"></i>Lihat Foto Saat Ini
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-lg-6 mb-3">
+                            <label for="{{ form.link_foto_drive_requester.id_for_label }}" class="form-label fw-bold">
+                                Link Foto Google Drive
+                            </label>
+                            {{ form.link_foto_drive_requester }}
+                            {% if form.link_foto_drive_requester.help_text %}
+                            <div class="form-text">{{ form.link_foto_drive_requester.help_text }}</div>
+                            {% endif %}
+                            {% if form.link_foto_drive_requester.errors %}
+                            <div class="text-danger small mt-1">
+                                {% for error in form.link_foto_drive_requester.errors %}{{ error }}{% endfor %}
+                            </div>
+                            {% endif %}
+                            {% if is_edit and jadwal_tayang.link_foto_drive_requester %}
+                            <div class="mt-2">
+                                <a href="{{ jadwal_tayang.link_foto_drive_requester }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-box-arrow-up-right me-1"></i>Buka Link Saat Ini
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
                     </div>
 
                 </div>

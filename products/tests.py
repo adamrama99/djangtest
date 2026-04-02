@@ -327,6 +327,34 @@ class JadwalTayangHistoryTests(TestCase):
                 reverse("jadwal_tayang_detail", args=[history_entry.doc_request_id]),
             )
 
+    def test_create_view_saves_requester_reference_photo_and_link_for_each_created_location(self):
+        self.client.force_login(self.admin)
+        start_at = timezone.now()
+        drive_link = "https://drive.google.com/file/d/requester-photo/view"
+
+        response = self.client.post(
+            reverse("jadwal_tayang_create"),
+            data={
+                "brand_materi": str(self.brand.id),
+                "lokasi": [str(self.lokasi_a.id), str(self.lokasi_b.id)],
+                "jenis_led": str(self.led_type.id),
+                "tanggal_tayang": self._datetime_input(start_at),
+                "tanggal_takeout": self._datetime_input(start_at + timedelta(hours=6)),
+                "note_requester": "Catatan requester",
+                "foto_referensi_requester": self._upload_file("requester-reference.jpg"),
+                "link_foto_drive_requester": drive_link,
+                "pic_pemohon": "Marketing",
+            },
+        )
+
+        created_requests = JadwalTayang.objects.order_by("id")
+
+        self.assertRedirects(response, reverse("jadwal_tayang_list"))
+        self.assertEqual(created_requests.count(), 2)
+        for request_obj in created_requests:
+            self.assertTrue(bool(request_obj.foto_referensi_requester))
+            self.assertEqual(request_obj.link_foto_drive_requester, drive_link)
+
     def test_status_and_pelaksana_updates_are_logged(self):
         jadwal_tayang = self.create_jadwal_tayang()
         self.client.force_login(self.admin)
@@ -417,6 +445,7 @@ class JadwalTayangHistoryTests(TestCase):
         jadwal_tayang = self.create_jadwal_tayang()
         self.client.force_login(self.admin)
         new_start_at = timezone.now() + timedelta(days=1)
+        drive_link = "https://drive.google.com/file/d/updated-requester-photo/view"
 
         response = self.client.post(
             reverse("jadwal_tayang_edit", args=[jadwal_tayang.pk]),
@@ -427,6 +456,8 @@ class JadwalTayangHistoryTests(TestCase):
                 "tanggal_tayang": self._datetime_input(new_start_at),
                 "tanggal_takeout": self._datetime_input(new_start_at + timedelta(hours=8)),
                 "note_requester": "Catatan requester baru",
+                "foto_referensi_requester": self._upload_file("edited-requester-reference.jpg"),
+                "link_foto_drive_requester": drive_link,
                 "pic_pemohon": "Sales",
             },
         )
@@ -445,6 +476,8 @@ class JadwalTayangHistoryTests(TestCase):
         self.assertEqual(jadwal_tayang.lokasi_display(), "Lokasi JT B")
         self.assertEqual(jadwal_tayang.pic_pemohon, "Sales")
         self.assertEqual(jadwal_tayang.note_requester, "Catatan requester baru")
+        self.assertTrue(bool(jadwal_tayang.foto_referensi_requester))
+        self.assertEqual(jadwal_tayang.link_foto_drive_requester, drive_link)
         self.assertSetEqual(
             field_names,
             {
@@ -455,6 +488,8 @@ class JadwalTayangHistoryTests(TestCase):
                 "Tanggal Takeout",
                 "PIC Pemohon",
                 "Notes Requester",
+                "Foto Referensi Requester",
+                "Link Foto Google Drive",
             },
         )
 
@@ -465,6 +500,21 @@ class JadwalTayangHistoryTests(TestCase):
         response = self.client.get(reverse("jadwal_tayang_edit", args=[jadwal_tayang.pk]))
 
         self.assertEqual(response.status_code, 403)
+
+    def test_detail_page_shows_requester_reference_photo_and_drive_link(self):
+        jadwal_tayang = self.create_jadwal_tayang()
+        jadwal_tayang.foto_referensi_requester = self._upload_file("detail-requester-reference.jpg")
+        jadwal_tayang.link_foto_drive_requester = "https://drive.google.com/file/d/detail-requester-reference/view"
+        jadwal_tayang.save()
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("jadwal_tayang_detail", args=[jadwal_tayang.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Foto Referensi Requester")
+        self.assertContains(response, "Link Foto Google Drive")
+        self.assertContains(response, jadwal_tayang.link_foto_drive_requester)
+        self.assertContains(response, jadwal_tayang.foto_referensi_requester.url)
 
 
 @override_settings(ALLOWED_HOSTS=["testserver", "localhost"])
