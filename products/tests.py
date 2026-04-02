@@ -18,6 +18,8 @@ from .models import (
     EditHistory,
     MaintenanceRequest,
     JadwalTayang,
+    JadwalTayangBuktiPlaylist,
+    JadwalTayangFotoTayang,
     JadwalTayangFotoTakeout,
     LEDType,
     Lokasi,
@@ -517,6 +519,220 @@ class JadwalTayangVisibilityTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["total_jt"], 1)
+
+
+@override_settings(ALLOWED_HOSTS=["testserver", "localhost"])
+class JadwalTayangListPhotoStatusTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._media_root = tempfile.mkdtemp()
+        cls._media_override = override_settings(MEDIA_ROOT=cls._media_root)
+        cls._media_override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._media_override.disable()
+        shutil.rmtree(cls._media_root, ignore_errors=True)
+        super().tearDownClass()
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = get_user_model().objects.create_user(
+            username="owner_photo_status",
+            password="password123",
+        )
+        cls.viewer = get_user_model().objects.create_user(
+            username="viewer_photo_status",
+            password="password123",
+        )
+        cls.brand_no_photo = BrandMateri.objects.create(name="Brand No Photo")
+        cls.brand_foto_tayang = BrandMateri.objects.create(name="Brand Foto Tayang")
+        cls.brand_playlist = BrandMateri.objects.create(name="Brand Playlist")
+        cls.brand_overdue = BrandMateri.objects.create(name="Brand Overdue")
+        cls.brand_takeout = BrandMateri.objects.create(name="Brand Takeout")
+        cls.lokasi = Lokasi.objects.create(name="Lokasi Photo Status")
+        cls.led_type = LEDType.objects.create(name="LED Photo Status")
+
+    def _upload_file(self, name):
+        return SimpleUploadedFile(name, b"fake-image-bytes", content_type="image/jpeg")
+
+    def create_jadwal_tayang(self, *, brand, start_at, takeout_at):
+        jadwal_tayang = JadwalTayang.objects.create(
+            submitted_by=self.owner,
+            brand_materi=brand,
+            jenis_led=self.led_type,
+            tanggal_tayang=start_at,
+            tanggal_takeout=takeout_at,
+            note_requester="Catatan photo status",
+            pic_pemohon="Marketing",
+        )
+        jadwal_tayang.lokasi.set([self.lokasi])
+        return jadwal_tayang
+
+    def test_list_uses_photo_based_status_labels(self):
+        now = timezone.now()
+        no_photo = self.create_jadwal_tayang(
+            brand=self.brand_no_photo,
+            start_at=now - timedelta(hours=1),
+            takeout_at=now + timedelta(hours=3),
+        )
+        foto_tayang = self.create_jadwal_tayang(
+            brand=self.brand_foto_tayang,
+            start_at=now - timedelta(hours=2),
+            takeout_at=now + timedelta(hours=2),
+        )
+        playlist_only = self.create_jadwal_tayang(
+            brand=self.brand_playlist,
+            start_at=now - timedelta(hours=2),
+            takeout_at=now + timedelta(hours=2),
+        )
+        overdue = self.create_jadwal_tayang(
+            brand=self.brand_overdue,
+            start_at=now - timedelta(hours=5),
+            takeout_at=now - timedelta(minutes=30),
+        )
+        takeout_done = self.create_jadwal_tayang(
+            brand=self.brand_takeout,
+            start_at=now - timedelta(hours=5),
+            takeout_at=now - timedelta(hours=1),
+        )
+
+        JadwalTayangFotoTayang.objects.create(
+            jadwal_tayang=foto_tayang,
+            foto=self._upload_file("tayang.jpg"),
+        )
+        JadwalTayangBuktiPlaylist.objects.create(
+            jadwal_tayang=playlist_only,
+            foto_pagi=self._upload_file("playlist.jpg"),
+        )
+        JadwalTayangFotoTakeout.objects.create(
+            jadwal_tayang=takeout_done,
+            foto=self._upload_file("takeout.jpg"),
+        )
+
+        self.client.force_login(self.viewer)
+        response = self.client.get(reverse("jadwal_tayang_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Status Foto")
+        self.assertContains(response, "Brand No Photo")
+        self.assertContains(response, "Brand Foto Tayang")
+        self.assertContains(response, "Brand Playlist")
+        self.assertContains(response, "Brand Overdue")
+        self.assertContains(response, "Brand Takeout")
+        self.assertContains(response, '<span class="badge text-bg-secondary">Belum Upload Foto</span>', html=True)
+        self.assertContains(response, '<span class="badge text-bg-info">Sudah Upload Foto Tayang</span>', html=True)
+        self.assertContains(response, '<span class="badge text-bg-info">Sudah Upload Bukti Playlist</span>', html=True)
+        self.assertContains(response, '<span class="badge text-bg-danger">Belum Takeout</span>', html=True)
+        self.assertContains(response, '<span class="badge text-bg-success">Sudah Upload Foto Takeout</span>', html=True)
+
+
+@override_settings(ALLOWED_HOSTS=["testserver", "localhost"])
+class JadwalTayangReportTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.viewer = get_user_model().objects.create_user(
+            username="report_viewer",
+            password="password123",
+        )
+        cls.owner = get_user_model().objects.create_user(
+            username="report_owner",
+            password="password123",
+        )
+        cls.brand_active_a = BrandMateri.objects.create(name="Brand Report Active A")
+        cls.brand_active_b = BrandMateri.objects.create(name="Brand Report Active B")
+        cls.brand_future = BrandMateri.objects.create(name="Brand Report Future")
+        cls.brand_past = BrandMateri.objects.create(name="Brand Report Past")
+        cls.lokasi_a = Lokasi.objects.create(name="Lokasi Report A")
+        cls.lokasi_b = Lokasi.objects.create(name="Lokasi Report B")
+        cls.led_type = LEDType.objects.create(name="LED Report")
+        cls.dokumentator = Dokumentator.objects.create(name="Dokumentator Report")
+
+    def create_jadwal_tayang(self, *, brand, lokasi, start_at, takeout_at, status="BELUM_TAYANG"):
+        jadwal_tayang = JadwalTayang.objects.create(
+            submitted_by=self.owner,
+            brand_materi=brand,
+            jenis_led=self.led_type,
+            tanggal_tayang=start_at,
+            tanggal_takeout=takeout_at,
+            note_requester="Catatan report",
+            pic_pemohon="Marketing Report",
+            status=status,
+        )
+        jadwal_tayang.lokasi.set([lokasi])
+        jadwal_tayang.pelaksana.set([self.dokumentator])
+        return jadwal_tayang
+
+    def test_report_shows_only_currently_active_jadwal_grouped_by_location(self):
+        now = timezone.now()
+        self.create_jadwal_tayang(
+            brand=self.brand_active_a,
+            lokasi=self.lokasi_a,
+            start_at=now - timedelta(hours=2),
+            takeout_at=now + timedelta(hours=2),
+            status="BELUM_TAYANG",
+        )
+        self.create_jadwal_tayang(
+            brand=self.brand_active_b,
+            lokasi=self.lokasi_b,
+            start_at=now - timedelta(minutes=30),
+            takeout_at=now + timedelta(hours=4),
+            status="SEDANG_TAYANG",
+        )
+        self.create_jadwal_tayang(
+            brand=self.brand_future,
+            lokasi=self.lokasi_a,
+            start_at=now + timedelta(hours=1),
+            takeout_at=now + timedelta(hours=6),
+            status="SEDANG_TAYANG",
+        )
+        self.create_jadwal_tayang(
+            brand=self.brand_past,
+            lokasi=self.lokasi_b,
+            start_at=now - timedelta(hours=8),
+            takeout_at=now - timedelta(hours=1),
+            status="SEDANG_TAYANG",
+        )
+
+        self.client.force_login(self.viewer)
+        response = self.client.get(reverse("jadwal_tayang_report"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Brand Report Active A")
+        self.assertContains(response, "Brand Report Active B")
+        self.assertNotContains(response, "Brand Report Future")
+        self.assertNotContains(response, "Brand Report Past")
+        self.assertContains(response, "Lokasi Report A")
+        self.assertContains(response, "Lokasi Report B")
+        self.assertEqual(response.context["active_count"], 2)
+        self.assertEqual(
+            [group["lokasi_name"] for group in response.context["report_groups"]],
+            ["Lokasi Report A", "Lokasi Report B"],
+        )
+
+    def test_report_search_filters_active_results_only(self):
+        now = timezone.now()
+        self.create_jadwal_tayang(
+            brand=self.brand_active_a,
+            lokasi=self.lokasi_a,
+            start_at=now - timedelta(hours=1),
+            takeout_at=now + timedelta(hours=2),
+        )
+        self.create_jadwal_tayang(
+            brand=self.brand_active_b,
+            lokasi=self.lokasi_b,
+            start_at=now - timedelta(hours=1),
+            takeout_at=now + timedelta(hours=3),
+        )
+
+        self.client.force_login(self.viewer)
+        response = self.client.get(reverse("jadwal_tayang_report"), {"q": "Lokasi Report B"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Brand Report Active B")
+        self.assertNotContains(response, "Brand Report Active A")
+        self.assertEqual(response.context["active_count"], 1)
 
 
 @override_settings(ALLOWED_HOSTS=["testserver", "localhost"])

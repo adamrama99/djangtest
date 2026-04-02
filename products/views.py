@@ -3,7 +3,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponseForbidden
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.template.loader import render_to_string
 from django.utils import timezone
 from .models import (
@@ -101,6 +101,74 @@ def _pk_search_q(search_query):
     if search_query.isdigit():
         return Q(pk=int(search_query))
     return Q(pk__isnull=True)
+
+
+def _group_jadwal_tayang_by_lokasi(jadwal_list):
+    grouped = {}
+
+    for jadwal_tayang in jadwal_list:
+        lokasi_list = list(jadwal_tayang.lokasi.all())
+        if not lokasi_list:
+            grouped.setdefault("Tanpa Lokasi", {"lokasi_name": "Tanpa Lokasi", "items": []})["items"].append(jadwal_tayang)
+            continue
+
+        for lokasi in sorted(lokasi_list, key=lambda item: item.name.casefold()):
+            grouped.setdefault(
+                lokasi.name,
+                {"lokasi_name": lokasi.name, "items": []},
+            )["items"].append(jadwal_tayang)
+
+    return [grouped[key] for key in sorted(grouped.keys(), key=str.casefold)]
+
+
+def _jadwal_tayang_photo_status_info(jadwal_tayang, now=None):
+    if now is None:
+        now = timezone.now()
+
+    has_foto_tayang = bool(getattr(jadwal_tayang, "has_foto_tayang", False))
+    has_foto_takeout = bool(getattr(jadwal_tayang, "has_foto_takeout", False))
+    has_bukti_playlist = bool(getattr(jadwal_tayang, "has_bukti_playlist", False))
+
+    if has_foto_takeout:
+        return {
+            "label": "Sudah Upload Foto Takeout",
+            "badge_class": "success",
+            "detail": "Foto takeout sudah tersedia.",
+        }
+
+    if now > jadwal_tayang.tanggal_takeout:
+        return {
+            "label": "Belum Takeout",
+            "badge_class": "danger",
+            "detail": "Waktu takeout sudah lewat, tetapi foto takeout belum ada.",
+        }
+
+    if has_foto_tayang and has_bukti_playlist:
+        return {
+            "label": "Sudah Upload Foto Tayang + Playlist",
+            "badge_class": "primary",
+            "detail": "Foto tayang dan bukti playlist sudah tersedia.",
+        }
+
+    if has_foto_tayang:
+        return {
+            "label": "Sudah Upload Foto Tayang",
+            "badge_class": "info",
+            "detail": "Foto tayang sudah tersedia.",
+        }
+
+    if has_bukti_playlist:
+        return {
+            "label": "Sudah Upload Bukti Playlist",
+            "badge_class": "info",
+            "detail": "Bukti playlist sudah tersedia.",
+        }
+
+    return {
+        "label": "Belum Upload Foto",
+        "badge_class": "secondary",
+        "detail": "Belum ada foto tayang, bukti playlist, atau foto takeout.",
+    }
 
 
 def _contains_search_value(search_query, *values):
@@ -853,9 +921,16 @@ def maint_request_update_pelaksana(request, pk):
 @login_required
 def jadwal_tayang_list(request):
     search_query = _get_search_query(request)
+    foto_tayang_exists = JadwalTayangFotoTayang.objects.filter(jadwal_tayang_id=OuterRef("pk"))
+    foto_takeout_exists = JadwalTayangFotoTakeout.objects.filter(jadwal_tayang_id=OuterRef("pk"))
+    bukti_playlist_exists = JadwalTayangBuktiPlaylist.objects.filter(jadwal_tayang_id=OuterRef("pk"))
     qs = JadwalTayang.objects.select_related(
         "brand_materi", "jenis_led", "submitted_by"
-    ).prefetch_related("lokasi", "pelaksana").all()
+    ).prefetch_related("lokasi", "pelaksana").annotate(
+        has_foto_tayang=Exists(foto_tayang_exists),
+        has_foto_takeout=Exists(foto_takeout_exists),
+        has_bukti_playlist=Exists(bukti_playlist_exists),
+    ).all()
     if search_query:
         qs = qs.filter(
             _pk_search_q(search_query)
@@ -871,13 +946,54 @@ def jadwal_tayang_list(request):
             | Q(submitted_by__last_name__icontains=search_query)
             | Q(pelaksana__name__icontains=search_query)
         ).distinct()
+    now = timezone.now()
+    requests = list(qs)
+    for req in requests:
+        req.photo_status_info = _jadwal_tayang_photo_status_info(req, now)
     return render(request, "products/jadwal_tayang_list.html", {
-        "requests": qs,
+        "requests": requests,
         "all_dokumentators": Dokumentator.objects.all().order_by("name"),
         "is_requester": _is_requester(request.user),
         "is_executor": _is_executor(request.user),
         "is_admin": _is_admin(request.user),
         **_search_context(request, "Cari brand, lokasi, PIC, notes, pelaksana, atau user"),
+    })
+
+
+@login_required
+def jadwal_tayang_report(request):
+    search_query = _get_search_query(request)
+    now = timezone.now()
+    qs = JadwalTayang.objects.select_related(
+        "brand_materi", "jenis_led", "submitted_by"
+    ).prefetch_related("lokasi", "pelaksana").filter(
+        tanggal_tayang__lte=now,
+        tanggal_takeout__gte=now,
+    )
+
+    if search_query:
+        qs = qs.filter(
+            _pk_search_q(search_query)
+            | Q(brand_materi__name__icontains=search_query)
+            | Q(lokasi__name__icontains=search_query)
+            | Q(jenis_led__name__icontains=search_query)
+            | Q(note_requester__icontains=search_query)
+            | Q(note_executor__icontains=search_query)
+            | Q(pic_pemohon__icontains=search_query)
+            | Q(submitted_by__username__icontains=search_query)
+            | Q(submitted_by__first_name__icontains=search_query)
+            | Q(submitted_by__last_name__icontains=search_query)
+            | Q(pelaksana__name__icontains=search_query)
+        ).distinct()
+
+    active_jadwal = list(qs.order_by("tanggal_takeout", "tanggal_tayang", "id"))
+    report_groups = _group_jadwal_tayang_by_lokasi(active_jadwal)
+
+    return render(request, "products/jadwal_tayang_report.html", {
+        "report_groups": report_groups,
+        "active_count": len(active_jadwal),
+        "generated_at": now,
+        **_search_context(request, "Cari brand, lokasi, PIC, pelaksana, atau user"),
     })
 
 

@@ -43,6 +43,7 @@ urlpatterns = [
 
     # Jadwal Tayang
     path("jadwal-tayang/", views.jadwal_tayang_list, name="jadwal_tayang_list"),
+    path("jadwal-tayang/report/", views.jadwal_tayang_report, name="jadwal_tayang_report"),
     path("jadwal-tayang/create/", views.jadwal_tayang_create, name="jadwal_tayang_create"),
     path("jadwal-tayang/<int:pk>/edit/", views.jadwal_tayang_edit, name="jadwal_tayang_edit"),
     path("jadwal-tayang/<int:pk>/", views.jadwal_tayang_detail, name="jadwal_tayang_detail"),

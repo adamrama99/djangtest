@@ -1,0 +1,136 @@
+{% extends "layouts/base.html" %}
+{% block title %}Report Jadwal Tayang Aktif{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-3">
+    <div>
+        <h3 class="mb-0">Report Jadwal Tayang Aktif</h3>
+        <p class="text-muted mb-0 small">
+            Menampilkan jadwal yang sedang tayang saat ini berdasarkan rentang tanggal tayang dan tanggal takeout.
+        </p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'jadwal_tayang_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> All Jadwal
+        </a>
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-6 col-xl-4">
+        <div class="card card-success card-outline h-100">
+            <div class="card-body">
+                <div class="text-muted text-uppercase small fw-semibold">Jadwal Aktif</div>
+                <div class="display-6 fw-bold mb-1">{{ active_count }}</div>
+                <div class="text-muted small">Sedang tayang pada waktu sekarang</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-4">
+        <div class="card card-success card-outline h-100">
+            <div class="card-body">
+                <div class="text-muted text-uppercase small fw-semibold">Lokasi Aktif</div>
+                <div class="display-6 fw-bold mb-1">{{ report_groups|length }}</div>
+                <div class="text-muted small">Jumlah grup lokasi yang memiliki jadwal aktif</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="card card-success card-outline h-100">
+            <div class="card-body">
+                <div class="text-muted text-uppercase small fw-semibold">Waktu Report</div>
+                <div class="fw-bold fs-5 mb-1">{{ generated_at|date:"d M Y H:i" }}</div>
+                <div class="text-muted small">Data dihitung saat halaman ini dibuka</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card card-success card-outline mb-3">
+    <div class="card-header">
+        <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+            <h3 class="card-title mb-0">
+                <i class="bi bi-filter-square me-2"></i>Filter Report
+            </h3>
+            {% include "products/_table_search.html" %}
+        </div>
+    </div>
+</div>
+
+{% for group in report_groups %}
+<div class="card card-success card-outline mb-3">
+    <div class="card-header">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+            <h3 class="card-title mb-0">
+                <i class="bi bi-geo-alt me-2"></i>{{ group.lokasi_name }}
+            </h3>
+            <span class="badge text-bg-primary">{{ group.items|length }} jadwal aktif</span>
+        </div>
+    </div>
+    <div class="card-body p-0 table-responsive">
+        <table class="table table-striped table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th style="width:60px">#</th>
+                    <th>Brand / Materi</th>
+                    <th>Jenis Produk</th>
+                    <th>Tayang</th>
+                    <th>Takeout</th>
+                    <th>PIC</th>
+                    <th>Pelaksana</th>
+                    <th>Status Saat Ini</th>
+                    <th style="width:90px" class="text-center">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for req in group.items %}
+                <tr>
+                    <td class="text-muted">{{ req.id }}</td>
+                    <td>
+                        <div class="fw-semibold">{{ req.brand_materi|default:"-" }}</div>
+                        <div class="text-muted small">{{ req.submitted_by.get_full_name|default:req.submitted_by.username }}</div>
+                    </td>
+                    <td>
+                        {% if req.jenis_led %}
+                        <span class="badge text-bg-warning">{{ req.jenis_led.name }}</span>
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="small">{{ req.tanggal_tayang|date:"d M Y H:i" }}</td>
+                    <td class="small">{{ req.tanggal_takeout|date:"d M Y H:i" }}</td>
+                    <td>{{ req.pic_pemohon }}</td>
+                    <td>
+                        {% for pelaksana in req.pelaksana.all %}
+                        <span class="badge text-bg-info">{{ pelaksana.name }}</span>
+                        {% empty %}
+                        <span class="text-muted small">Belum ditentukan</span>
+                        {% endfor %}
+                    </td>
+                    <td>
+                        <span class="badge text-bg-success">Sedang Tayang</span>
+                    </td>
+                    <td class="text-center">
+                        <a href="{% url 'jadwal_tayang_detail' req.id %}" class="btn btn-sm btn-info" title="View Detail">
+                            <i class="bi bi-eye-fill"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% empty %}
+<div class="card card-success card-outline">
+    <div class="card-body text-center text-muted py-5">
+        <i class="bi bi-calendar-x display-6 d-block mb-2"></i>
+        {% if search_active %}
+        Tidak ada jadwal tayang aktif yang cocok dengan "{{ search_query }}". <a href="{% url 'jadwal_tayang_report' %}">Reset pencarian</a>.
+        {% else %}
+        Tidak ada jadwal tayang yang sedang aktif saat ini.
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

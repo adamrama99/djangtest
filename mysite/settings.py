@@ -97,9 +97,9 @@ SECRET_KEY = env(
 
 DEBUG = env_bool("DJANGO_DEBUG", default=False)
 
-ALLOWED_HOSTS = ["its-request.mingpromo.com"]
+ALLOWED_HOSTS = ["its-request.mingpromo.com", "127.0.0.1", "localhost", "103.102.153.146"]
 
-CSRF_TRUSTED_ORIGINS = ["https://its-request.mingpromo.com"]
+CSRF_TRUSTED_ORIGINS = ["http://its-request.mingpromo.com", "https://its-request.mingpromo.com"]
 
 
 INSTALLED_APPS = [

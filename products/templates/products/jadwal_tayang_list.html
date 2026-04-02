@@ -8,11 +8,16 @@
         <h3 class="mb-0">Jadwal Tayang</h3>
         <p class="text-muted mb-0 small">Kelola jadwal tayang dan takeout materi</p>
     </div>
-    {% if is_requester or is_admin %}
-    <a href="{% url 'jadwal_tayang_create' %}" class="btn btn-success">
-        <i class="bi bi-plus-lg me-1"></i> New Jadwal Tayang
-    </a>
-    {% endif %}
+    <div class="d-flex gap-2">
+        <a href="{% url 'jadwal_tayang_report' %}" class="btn btn-outline-primary">
+            <i class="bi bi-bar-chart-line me-1"></i> Report Aktif
+        </a>
+        {% if is_requester or is_admin %}
+        <a href="{% url 'jadwal_tayang_create' %}" class="btn btn-success">
+            <i class="bi bi-plus-lg me-1"></i> New Jadwal Tayang
+        </a>
+        {% endif %}
+    </div>
 </div>
 
 <div class="card card-success card-outline">
@@ -37,7 +42,7 @@
                     <th>Tgl Tayang</th>
                     <th>Tgl Takeout</th>
                     <th>PIC</th>
-                    <th>Status</th>
+                    <th>Status Foto</th>
                     {% if is_admin %}
                     <th>Pelaksana</th>
                     {% endif %}
@@ -63,13 +68,8 @@
                     <td class="small">{{ req.tanggal_takeout|date:"d M Y H:i" }}</td>
                     <td>{{ req.pic_pemohon }}</td>
                     <td>
-                        {% if req.status == "BELUM_TAYANG" %}
-                        <span class="badge text-bg-secondary">Belum Tayang</span>
-                        {% elif req.status == "SEDANG_TAYANG" %}
-                        <span class="badge text-bg-info">Sedang Tayang</span>
-                        {% elif req.status == "SUDAH_TAKEOUT" %}
-                        <span class="badge text-bg-success">Sudah Takeout</span>
-                        {% endif %}
+                        <span class="badge text-bg-{{ req.photo_status_info.badge_class }}">{{ req.photo_status_info.label }}</span>
+                        <div class="text-muted small mt-1">{{ req.photo_status_info.detail }}</div>
                     </td>
                     {% if is_admin %}
                     <td>

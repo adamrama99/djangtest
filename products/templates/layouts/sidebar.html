@@ -84,9 +84,9 @@
 
         <!-- Jadwal Tayang -->
         <li
-          class="nav-item {% if request.resolver_match.url_name in 'jadwal_tayang_list,jadwal_tayang_create,jadwal_tayang_detail,jadwal_tayang_delete' %}menu-open{% endif %}">
+          class="nav-item {% if request.resolver_match.url_name in 'jadwal_tayang_list,jadwal_tayang_report,jadwal_tayang_create,jadwal_tayang_detail,jadwal_tayang_delete' %}menu-open{% endif %}">
           <a href="#"
-            class="nav-link {% if request.resolver_match.url_name in 'jadwal_tayang_list,jadwal_tayang_create,jadwal_tayang_detail,jadwal_tayang_delete' %}active{% endif %}">
+            class="nav-link {% if request.resolver_match.url_name in 'jadwal_tayang_list,jadwal_tayang_report,jadwal_tayang_create,jadwal_tayang_detail,jadwal_tayang_delete' %}active{% endif %}">
             <i class="nav-icon bi bi-calendar-event"></i>
             <p>
               Jadwal Tayang
@@ -99,6 +99,13 @@
                 class="nav-link {% if request.resolver_match.url_name == 'jadwal_tayang_list' %}active{% endif %}">
                 <i class="nav-icon bi bi-list-ul"></i>
                 <p>All Jadwal</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{% url 'jadwal_tayang_report' %}"
+                class="nav-link {% if request.resolver_match.url_name == 'jadwal_tayang_report' %}active{% endif %}">
+                <i class="nav-icon bi bi-bar-chart-line"></i>
+                <p>Report Aktif</p>
               </a>
             </li>
           </ul>
