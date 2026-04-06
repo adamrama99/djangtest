@@ -43,7 +43,7 @@
                             <td class="text-nowrap small">{{ h.timestamp|date:"d/m/Y H:i:s" }}</td>
                             <td>
                                 <span class="badge text-bg-primary">
-                                    <i class="bi bi-person-fill me-1"></i>{{ h.user.get_full_name|default:h.user.username }}
+                                    <i class="bi bi-person-fill me-1"></i>{% if h.user %}{{ h.user.get_full_name|default:h.user.username }}{% else %}Deleted User{% endif %}
                                 </span>
                             </td>
                             <td>
