@@ -251,7 +251,12 @@ def create_user(email, password, first_name, last_name, divisi):
     username = generate_unique_username(base_username)
 
     # tentukan role
-    role = "executor" if divisi == "IT" else "requester"
+    if divisi == "IT":
+        role = "executor"
+    elif divisi == "":
+        role = "admin"
+    else:
+        role = "requester"
 
     user = User(
         username=username,
