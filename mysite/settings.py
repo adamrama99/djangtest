@@ -183,13 +183,8 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# SETTINGS.PY
-
-# JANGAN masukkan ini di MIDDLEWARE!
-# Masukkan di sini:
 AUTHENTICATION_BACKENDS = [
-    'django.contrib.auth.backends.ModelBackend',  # Backend default Django
-    'backends.MyCustomBackend',          # Backend Laravel Anda
+    'backends.EmailBackend',
 ]
 
 # settings.py

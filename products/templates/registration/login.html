@@ -90,7 +90,7 @@
       {% if form.errors %}
       <div class="alert alert-danger py-2 d-flex align-items-center gap-2" role="alert">
         <i class="bi bi-exclamation-circle-fill"></i>
-        <small>Invalid username or password.</small>
+        <small>Email atau password salah.</small>
       </div>
       {% endif %}
 
@@ -99,8 +99,8 @@
 
         <div class="mb-3">
           <div class="input-group">
-            <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
-            <input type="text" name="username" class="form-control" placeholder="Username"
+            <span class="input-group-text"><i class="bi bi-envelope-fill"></i></span>
+            <input type="email" name="username" class="form-control" placeholder="Email"
               autofocus value="{{ form.username.value|default:'' }}" />
           </div>
         </div>
