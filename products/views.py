@@ -1047,7 +1047,7 @@ def jadwal_tayang_create(request):
     })
 
 
-@admin_required
+@requester_or_admin_required
 def jadwal_tayang_edit(request, pk):
     jt = get_object_or_404(
         JadwalTayang.objects.select_related("brand_materi", "jenis_led").prefetch_related("lokasi"),

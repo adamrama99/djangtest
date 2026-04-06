@@ -86,10 +86,12 @@
                         <a href="{% url 'jadwal_tayang_detail' req.id %}" class="btn btn-sm btn-info me-1" title="View Detail">
                             <i class="bi bi-eye-fill"></i>
                         </a>
-                        {% if is_admin %}
+                        {% if is_admin or is_requester %}
                         <a href="{% url 'jadwal_tayang_edit' req.id %}" class="btn btn-sm btn-warning me-1" title="Edit">
                             <i class="bi bi-pencil-fill"></i>
                         </a>
+                        {% endif %}
+                        {% if is_admin %}
                         <a href="{% url 'jadwal_tayang_delete' req.id %}" class="btn btn-sm btn-danger" title="Delete">
                             <i class="bi bi-trash-fill"></i>
                         </a>
