@@ -1,0 +1,44 @@
+﻿=== HASH VALID (60 chars, password asli Laravel) ===
+
+=== HASH TIDAK VALID (bukan 60 chars, password jadi password123) ===
+  BAD sandrady.irwan@ming.com (CEO) - 52 chars
+  BAD thaariq.ibnu@ming.com (CREATIVE) - 20 chars
+  BAD ali.salim@ming.com (DIREKTUR) - 2 chars
+  BAD abimanyu.giri@ming.com (FINANCE) - 29 chars
+  BAD butet.siregar@ming.com (FINANCE) - 29 chars
+  BAD deswendri.arung@ming.com (FINANCE) - 27 chars
+  BAD eka.dewi@ming.com (FINANCE) - 27 chars
+  BAD fikri.hidayat@ming.com (FINANCE) - 27 chars
+  BAD nisrina.rahma@ming.com (FINANCE) - 27 chars
+  BAD putri.wahyu@ming.com (FINANCE) - 27 chars
+  BAD abie.yudha@ming.com (GD) - 27 chars
+  BAD david.christianto@ming.com (GD) - 27 chars
+  BAD fikri.ardiansyah@ming.com (GD) - 27 chars
+  BAD hendro.purwoto@ming.com (GD) - 27 chars
+  BAD jan.tamado@ming.com (GD) - 27 chars
+  BAD risda.rochaeti@ming.com (HRD) - 27 chars
+  BAD ardiansyah@ming.com (HRD) - 27 chars
+  BAD dedi@ming.com (HRD) - 27 chars
+  BAD rosa@ming.com (HRD) - 27 chars
+  BAD dian.melva@ming.com (HRD) - 27 chars
+  BAD idawati.tinambunan@ming.com (HRD) - 27 chars
+  BAD m.tohir@ming.com (HRD) - 27 chars
+  BAD rehan@ming.com (HRD) - 27 chars
+  BAD sabraamalisi.dadang@ming.com (HRD) - 27 chars
+  BAD adam.ramadhan@ming.com (IT) - 27 chars
+  BAD isnaeni.hidayat@ming.com (IT) - 27 chars
+  BAD christian.victor@ming.com (Luminova) - 27 chars
+  BAD ernest@ming.com (Luminova) - 27 chars
+  BAD juan.jonatan@ming.com (Luminova) - 27 chars
+  BAD sandra.marcella@ming.com (Luminova) - 27 chars
+  BAD hafidz@ming.com (MKTG) - 46 chars
+  BAD ilyas.mutawakkil@ming.com (MKTG) - 45 chars
+  BAD mawarni.dwi@ming.com (MKTG) - 45 chars
+  BAD tia.pratiwi@ming.com (MKTG) - 45 chars
+  BAD william.aldoson@ming.com (MKTG) - 45 chars
+  BAD supriyanto@ming.com (PD) - 45 chars
+  BAD nurun.nisah@ming.com (MLED) - 41 chars
+  BAD rubiyanto@ming.com (IT) - 40 chars
+  BAD ahmad.lutfi@ming.com (MKTG) - 32 chars
+
+Total valid: 0, invalid: 39

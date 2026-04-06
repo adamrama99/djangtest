@@ -112,7 +112,7 @@ INSTALLED_APPS = [
     "products",
 ]
 
-MIDDLEWARE = [
+MIDDLEWARE = [       # Backend Laravel Anda
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -183,6 +183,21 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+# SETTINGS.PY
+
+# JANGAN masukkan ini di MIDDLEWARE!
+# Masukkan di sini:
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',  # Backend default Django
+    'backends.MyCustomBackend',          # Backend Laravel Anda
+]
+
+# settings.py
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.BCryptPasswordHasher',        # Untuk bcrypt dari Laravel ($2y$)
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',        # Untuk password baru Django
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+]
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "Asia/Jakarta"
