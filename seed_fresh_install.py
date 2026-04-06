@@ -105,7 +105,7 @@ def clear_seed_users():
     print(f'  Cleared {deleted} user records')
 
 USERS = [
-    ('admin@company.com', 'password', 'Super', 'Admin', 'IT'),
+    ('admin@company.com', 'password', 'Super', 'Admin', ''),
     ('executor@company.com', 'password', 'Default', 'Executor', 'IT'),
     ('requester@company.com', 'password', 'Default', 'Requester', 'Marketing'),
 
