@@ -9,10 +9,19 @@
     <h3 class="mb-0"><i class="bi {{ config.icon }} me-2"></i>{{ config.label }}</h3>
     <p class="text-muted mb-0 small">Manage {{ config.label }} master data</p>
   </div>
-  <button type="button" class="btn btn-primary"
-          onclick="loadModal('{% url 'master_data_create' slug %}')">
-    <i class="bi bi-plus-lg me-1"></i> Add {{ config.label }}
-  </button>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'master_data_export' slug %}" class="btn btn-success">
+      <i class="bi bi-download me-1"></i>Export
+    </a>
+    <button type="button" class="btn btn-info text-white"
+            onclick="loadModal('{% url 'master_data_import_preview' slug %}')">
+      <i class="bi bi-upload me-1"></i>Import
+    </button>
+    <button type="button" class="btn btn-primary"
+            onclick="loadModal('{% url 'master_data_create' slug %}')">
+      <i class="bi bi-plus-lg me-1"></i>Add {{ config.label }}
+    </button>
+  </div>
 </div>
 
 <!-- Navigation Pills -->
@@ -110,11 +119,28 @@
       .then(r => r.text())
       .then(html => {
         modalContent.innerHTML = html;
-        bindModalForm(url);
+        initializeModalContent(url);
       })
       .catch(() => {
         modalContent.innerHTML = '<div class="modal-body text-center py-4 text-danger"><i class="bi bi-exclamation-circle fs-1 d-block mb-2"></i>Failed to load content.</div>';
       });
+  }
+
+  function initializeModalContent(actionUrl) {
+    executeInlineScripts(modalContent);
+    bindModalForm(actionUrl);
+  }
+
+  function executeInlineScripts(container) {
+    const scripts = container.querySelectorAll('script');
+    scripts.forEach((oldScript) => {
+      const newScript = document.createElement('script');
+      Array.from(oldScript.attributes).forEach((attr) => {
+        newScript.setAttribute(attr.name, attr.value);
+      });
+      newScript.textContent = oldScript.textContent;
+      oldScript.replaceWith(newScript);
+    });
   }
 
   function bindModalForm(actionUrl) {
@@ -144,7 +170,7 @@
             location.reload();
           } else if (result.type === 'html') {
             modalContent.innerHTML = result.data;
-            bindModalForm(actionUrl);
+            initializeModalContent(actionUrl);
           }
         })
         .catch(() => {

@@ -1,7 +1,10 @@
+import io
+import json
 import os
+import openpyxl
 from functools import wraps
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import JsonResponse, HttpResponseForbidden
+from django.http import JsonResponse, HttpResponse, HttpResponseForbidden
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Exists, OuterRef, Q
@@ -805,6 +808,159 @@ def master_data_delete(request, slug, pk):
         return redirect("master_data_list", slug=slug)
     template = "products/_master_data_delete_modal.html" if _is_ajax(request) else "products/master_data_list.html"
     return render(request, template, {"item": item, "config": config, "slug": slug})
+
+
+@admin_required
+def master_data_export(request, slug):
+    """Export master data as Excel (.xlsx) with a single 'name' column."""
+    config = MASTER_DATA_REGISTRY.get(slug)
+    if not config:
+        return HttpResponseForbidden("Not found.")
+
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = config["label"].replace("/", "-")[:31]  # Excel limits title to 31 chars
+
+    # Header style
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    header_alignment = Alignment(horizontal="center", vertical="center")
+    thin_border = Border(
+        left=Side(style="thin"),
+        right=Side(style="thin"),
+        top=Side(style="thin"),
+        bottom=Side(style="thin"),
+    )
+
+    # Write header
+    ws["A1"] = "name"
+    ws["A1"].font = header_font
+    ws["A1"].fill = header_fill
+    ws["A1"].alignment = header_alignment
+    ws["A1"].border = thin_border
+
+    # Write data
+    items = list(config["model"].objects.all().order_by("name"))
+    for idx, item in enumerate(items, start=2):
+        cell = ws.cell(row=idx, column=1, value=item.name)
+        cell.border = thin_border
+
+    # Auto-fit column width
+    max_len = max((len(str(item.name)) for item in items), default=10) if items else 10
+    ws.column_dimensions["A"].width = max(max_len + 4, 20)
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    response = HttpResponse(
+        output.read(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = f'attachment; filename="{slug}.xlsx"'
+    return response
+
+
+@admin_required
+def master_data_import_preview(request, slug):
+    """Preview import: parse Excel and return JSON with new vs duplicate items."""
+    config = MASTER_DATA_REGISTRY.get(slug)
+    if not config:
+        return JsonResponse({"success": False, "error": "Not found."}, status=404)
+
+    if request.method != "POST":
+        # GET: render the import modal
+        return render(request, "products/_master_data_import_modal.html", {
+            "config": config, "slug": slug,
+        })
+
+    excel_file = request.FILES.get("excel_file")
+    if not excel_file:
+        return JsonResponse({"success": False, "error": "File Excel diperlukan."}, status=400)
+
+    if not excel_file.name.endswith((".xlsx", ".xls")):
+        return JsonResponse({"success": False, "error": "File harus berformat .xlsx"}, status=400)
+
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(excel_file.read()), read_only=True)
+        ws = wb.active
+
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows:
+            return JsonResponse({"success": False, "error": "File kosong."}, status=400)
+
+        # Find 'name' column
+        headers = [str(h).strip().lower() if h else "" for h in rows[0]]
+        if "name" not in headers:
+            return JsonResponse(
+                {"success": False, "error": 'Kolom "name" tidak ditemukan di file Excel.'},
+                status=400,
+            )
+        name_col_idx = headers.index("name")
+
+        # Parse names
+        existing_names = set(
+            config["model"].objects.values_list("name", flat=True)
+        )
+        new_items = []
+        duplicate_items = []
+
+        for row in rows[1:]:
+            if name_col_idx < len(row) and row[name_col_idx]:
+                name = str(row[name_col_idx]).strip()
+                if not name:
+                    continue
+                if name in existing_names:
+                    duplicate_items.append(name)
+                else:
+                    if name not in [n for n in new_items]:  # avoid dupes in file
+                        new_items.append(name)
+                    else:
+                        duplicate_items.append(name)
+
+        wb.close()
+        return JsonResponse({
+            "success": True,
+            "new_items": new_items,
+            "duplicate_items": duplicate_items,
+            "total": len(new_items) + len(duplicate_items),
+        })
+    except Exception as e:
+        return JsonResponse({"success": False, "error": f"Gagal membaca file: {str(e)}"}, status=400)
+
+
+@admin_required
+def master_data_import_confirm(request, slug):
+    """Confirm and execute import of the provided names."""
+    config = MASTER_DATA_REGISTRY.get(slug)
+    if not config:
+        return JsonResponse({"success": False, "error": "Not found."}, status=404)
+
+    if request.method != "POST":
+        return HttpResponseForbidden("POST only.")
+
+    try:
+        body = json.loads(request.body)
+        names = body.get("names", [])
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({"success": False, "error": "Invalid request."}, status=400)
+
+    created_count = 0
+    for name in names:
+        name = str(name).strip()
+        if not name:
+            continue
+        _, created = config["model"].objects.get_or_create(name=name)
+        if created:
+            created_count += 1
+
+    return JsonResponse({
+        "success": True,
+        "created": created_count,
+        "message": f"{created_count} data berhasil ditambahkan.",
+    })
 
 
 # --- Maintenance & Troubleshoot LED Views ---

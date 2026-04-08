@@ -1,0 +1,250 @@
+<!-- Import Modal for Master Data -->
+<div class="modal-header bg-primary text-white">
+  <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Import {{ config.label }}</h5>
+  <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+</div>
+
+<!-- Step 1: File Upload -->
+<div id="import-step-upload">
+  <div class="modal-body">
+    <div class="alert alert-info d-flex align-items-start mb-3">
+      <i class="bi bi-info-circle-fill me-2 mt-1"></i>
+      <div>
+        <strong>Format Excel:</strong> File <code>.xlsx</code> dengan kolom header <code>name</code>.
+        <br><small class="text-muted">Gunakan tombol <strong>Export</strong> untuk mengunduh template yang benar.</small>
+      </div>
+    </div>
+    <div class="mb-3">
+      <label for="importExcelFile" class="form-label fw-semibold">Pilih File Excel (.xlsx)</label>
+      <input type="file" class="form-control" id="importExcelFile" accept=".xlsx,.xls">
+    </div>
+    <div id="import-error" class="alert alert-danger d-none"></div>
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+    <button type="button" class="btn btn-primary" id="btnPreviewImport" disabled>
+      <i class="bi bi-eye me-1"></i>Preview
+    </button>
+  </div>
+</div>
+
+<!-- Step 2: Preview (hidden initially) -->
+<div id="import-step-preview" class="d-none">
+  <div class="modal-body">
+    <!-- Summary badges -->
+    <div class="d-flex gap-2 mb-3">
+      <span class="badge bg-success fs-6 px-3 py-2">
+        <i class="bi bi-plus-circle me-1"></i>Baru: <strong id="preview-new-count">0</strong>
+      </span>
+      <span class="badge bg-warning text-dark fs-6 px-3 py-2">
+        <i class="bi bi-arrow-repeat me-1"></i>Duplikat: <strong id="preview-dup-count">0</strong>
+      </span>
+    </div>
+
+    <!-- New items -->
+    <div id="preview-new-section" class="mb-3 d-none">
+      <h6 class="text-success fw-bold mb-2"><i class="bi bi-check-circle me-1"></i>Data Baru (akan ditambahkan)</h6>
+      <div id="preview-new-list" class="border rounded p-2" style="max-height: 180px; overflow-y: auto;"></div>
+    </div>
+
+    <!-- Duplicate items -->
+    <div id="preview-dup-section" class="mb-3 d-none">
+      <h6 class="text-warning fw-bold mb-2"><i class="bi bi-exclamation-triangle me-1"></i>Data Duplikat (akan dilewati)</h6>
+      <div id="preview-dup-list" class="border rounded p-2" style="max-height: 180px; overflow-y: auto;"></div>
+    </div>
+
+    <!-- No new data warning -->
+    <div id="preview-no-new" class="alert alert-warning d-none">
+      <i class="bi bi-info-circle me-1"></i>Semua data dari file sudah ada di database. Tidak ada data baru untuk diimport.
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-outline-secondary" id="btnBackToUpload">
+      <i class="bi bi-arrow-left me-1"></i>Kembali
+    </button>
+    <button type="button" class="btn btn-success" id="btnConfirmImport" disabled>
+      <i class="bi bi-check-lg me-1"></i>Konfirmasi Import
+    </button>
+  </div>
+</div>
+
+<!-- Step 3: Result (hidden initially) -->
+<div id="import-step-result" class="d-none">
+  <div class="modal-body text-center py-4">
+    <i class="bi bi-check-circle-fill text-success display-3 d-block mb-3"></i>
+    <h5 id="import-result-message" class="mb-0"></h5>
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-primary" onclick="location.reload()">
+      <i class="bi bi-arrow-clockwise me-1"></i>Refresh Halaman
+    </button>
+  </div>
+</div>
+
+<script>
+(function() {
+  const fileInput = document.getElementById('importExcelFile');
+  const btnPreview = document.getElementById('btnPreviewImport');
+  const btnBack = document.getElementById('btnBackToUpload');
+  const btnConfirm = document.getElementById('btnConfirmImport');
+  const errorDiv = document.getElementById('import-error');
+
+  const stepUpload = document.getElementById('import-step-upload');
+  const stepPreview = document.getElementById('import-step-preview');
+  const stepResult = document.getElementById('import-step-result');
+
+  const previewUrl = "{% url 'master_data_import_preview' slug %}";
+  const confirmUrl = "{% url 'master_data_import_confirm' slug %}";
+
+  let pendingNewItems = [];
+
+  // Enable preview button when file selected
+  fileInput.addEventListener('change', function() {
+    btnPreview.disabled = !this.files.length;
+    errorDiv.classList.add('d-none');
+  });
+
+  // Step 1 → Step 2: Preview
+  btnPreview.addEventListener('click', function() {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    const origHtml = btnPreview.innerHTML;
+    btnPreview.disabled = true;
+    btnPreview.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Memproses...';
+    errorDiv.classList.add('d-none');
+
+    const formData = new FormData();
+    formData.append('excel_file', file);
+
+    fetch(previewUrl, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value
+                       || document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '',
+      },
+      body: formData,
+    })
+    .then(r => r.json())
+    .then(data => {
+      btnPreview.disabled = false;
+      btnPreview.innerHTML = origHtml;
+
+      if (!data.success) {
+        errorDiv.textContent = data.error;
+        errorDiv.classList.remove('d-none');
+        return;
+      }
+
+      // Populate preview
+      pendingNewItems = data.new_items || [];
+      const dupItems = data.duplicate_items || [];
+
+      document.getElementById('preview-new-count').textContent = pendingNewItems.length;
+      document.getElementById('preview-dup-count').textContent = dupItems.length;
+
+      // New items list
+      const newSection = document.getElementById('preview-new-section');
+      const newList = document.getElementById('preview-new-list');
+      if (pendingNewItems.length) {
+        newList.innerHTML = pendingNewItems.map(name =>
+          `<div class="d-flex align-items-center py-1 px-2 border-bottom">
+            <i class="bi bi-plus-circle-fill text-success me-2"></i>
+            <span>${escapeHtml(name)}</span>
+          </div>`
+        ).join('');
+        newSection.classList.remove('d-none');
+      } else {
+        newSection.classList.add('d-none');
+      }
+
+      // Duplicate items list
+      const dupSection = document.getElementById('preview-dup-section');
+      const dupList = document.getElementById('preview-dup-list');
+      if (dupItems.length) {
+        dupList.innerHTML = dupItems.map(name =>
+          `<div class="d-flex align-items-center py-1 px-2 border-bottom">
+            <i class="bi bi-dash-circle-fill text-warning me-2"></i>
+            <span class="text-muted">${escapeHtml(name)}</span>
+          </div>`
+        ).join('');
+        dupSection.classList.remove('d-none');
+      } else {
+        dupSection.classList.add('d-none');
+      }
+
+      // No new data warning
+      const noNewDiv = document.getElementById('preview-no-new');
+      if (!pendingNewItems.length) {
+        noNewDiv.classList.remove('d-none');
+        btnConfirm.disabled = true;
+      } else {
+        noNewDiv.classList.add('d-none');
+        btnConfirm.disabled = false;
+      }
+
+      // Switch to step 2
+      stepUpload.classList.add('d-none');
+      stepPreview.classList.remove('d-none');
+    })
+    .catch(() => {
+      btnPreview.disabled = false;
+      btnPreview.innerHTML = origHtml;
+      errorDiv.textContent = 'Terjadi kesalahan saat memproses file.';
+      errorDiv.classList.remove('d-none');
+    });
+  });
+
+  // Back button
+  btnBack.addEventListener('click', function() {
+    stepPreview.classList.add('d-none');
+    stepUpload.classList.remove('d-none');
+  });
+
+  // Step 2 → Step 3: Confirm import
+  btnConfirm.addEventListener('click', function() {
+    if (!pendingNewItems.length) return;
+
+    const origHtml = btnConfirm.innerHTML;
+    btnConfirm.disabled = true;
+    btnConfirm.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Mengimport...';
+
+    fetch(confirmUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value
+                       || document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '',
+      },
+      body: JSON.stringify({ names: pendingNewItems }),
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        document.getElementById('import-result-message').textContent = data.message;
+        stepPreview.classList.add('d-none');
+        stepResult.classList.remove('d-none');
+      } else {
+        btnConfirm.disabled = false;
+        btnConfirm.innerHTML = origHtml;
+        alert(data.error || 'Gagal mengimport data.');
+      }
+    })
+    .catch(() => {
+      btnConfirm.disabled = false;
+      btnConfirm.innerHTML = origHtml;
+      alert('Terjadi kesalahan saat mengimport data.');
+    });
+  });
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+})();
+</script>
+
+{% csrf_token %}

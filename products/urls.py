@@ -40,6 +40,9 @@ urlpatterns = [
     path("master/<slug:slug>/create/", views.master_data_create, name="master_data_create"),
     path("master/<slug:slug>/<int:pk>/edit/", views.master_data_edit, name="master_data_edit"),
     path("master/<slug:slug>/<int:pk>/delete/", views.master_data_delete, name="master_data_delete"),
+    path("master/<slug:slug>/export/", views.master_data_export, name="master_data_export"),
+    path("master/<slug:slug>/import/preview/", views.master_data_import_preview, name="master_data_import_preview"),
+    path("master/<slug:slug>/import/confirm/", views.master_data_import_confirm, name="master_data_import_confirm"),
 
     # Jadwal Tayang
     path("jadwal-tayang/", views.jadwal_tayang_list, name="jadwal_tayang_list"),
