@@ -1,7 +1,6 @@
 import io
 import json
 import os
-import openpyxl
 from functools import wraps
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponse, HttpResponseForbidden
@@ -35,6 +34,14 @@ User = get_user_model()
 
 def _is_ajax(request):
     return request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+
+def _load_openpyxl():
+    try:
+        import openpyxl
+    except ImportError:
+        return None
+    return openpyxl
 
 
 def _is_admin(user):
@@ -817,6 +824,10 @@ def master_data_export(request, slug):
     if not config:
         return HttpResponseForbidden("Not found.")
 
+    openpyxl = _load_openpyxl()
+    if openpyxl is None:
+        return HttpResponse("Fitur export Excel belum tersedia di server ini.", status=503)
+
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
     wb = openpyxl.Workbook()
@@ -869,6 +880,13 @@ def master_data_import_preview(request, slug):
     config = MASTER_DATA_REGISTRY.get(slug)
     if not config:
         return JsonResponse({"success": False, "error": "Not found."}, status=404)
+
+    openpyxl = _load_openpyxl()
+    if openpyxl is None:
+        return JsonResponse(
+            {"success": False, "error": "Fitur import Excel belum tersedia di server ini."},
+            status=503,
+        )
 
     if request.method != "POST":
         # GET: render the import modal
