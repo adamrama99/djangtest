@@ -3,15 +3,9 @@
 ========================================
 
 ADMIN
-  Username : admin
-  Password : admin123
+  Username : ming@ming.com
+  Password : Password
   Role     : Admin (full access)
-
-STAFF
-  Username : staff
-  Password : staff123
-  Role     : Staff (submit & lihat doc request sendiri)
-
 
 kalo upload folder ini jangan ikut:
 .venv
@@ -22,3 +16,6 @@ untuk menerapkan update di website
 pkill -f gunicorn
 /var/www/djangtest/venv/bin/python -m pip install -r requirements.txt
 /var/www/djangtest/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:8002 mysite.wsgi:application
+
+jalankan venv
+.\.venv\Scripts\Activate.ps1
