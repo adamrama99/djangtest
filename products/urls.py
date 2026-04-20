@@ -57,7 +57,9 @@ urlpatterns = [
 
     # User Management (Admin Only)
     path("users/", views.user_list, name="user_list"),
+    path("users/never-login/", views.user_never_login_list, name="user_never_login_list"),
     path("users/create/", views.user_create, name="user_create"),
+    path("users/<int:pk>/login-requirement/", views.user_update_login_requirement, name="user_update_login_requirement"),
     path("users/<int:pk>/edit/", views.user_edit, name="user_edit"),
     path("users/<int:pk>/delete/", views.user_delete, name="user_delete"),
 

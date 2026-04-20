@@ -80,9 +80,23 @@
                             {{ form.email }}
                         </div>
                         <div class="col-md-6 mb-3 d-flex align-items-end pb-2">
-                            <div class="form-check form-switch">
-                                {{ form.is_active }}
-                                <label class="form-check-label fw-bold" for="{{ form.is_active.id_for_label }}">Active</label>
+                            <div class="d-flex flex-column gap-2">
+                                <div class="form-check form-switch">
+                                    {{ form.is_active }}
+                                    <label class="form-check-label fw-bold" for="{{ form.is_active.id_for_label }}">Active</label>
+                                </div>
+                                <div>
+                                    <div class="form-check form-switch">
+                                        {{ form.requires_login }}
+                                        <label class="form-check-label fw-bold" for="{{ form.requires_login.id_for_label }}">Perlu Login</label>
+                                    </div>
+                                    {% if form.requires_login.help_text %}
+                                    <div class="text-muted small">{{ form.requires_login.help_text }}</div>
+                                    {% endif %}
+                                    {% if form.requires_login.errors %}
+                                    <div class="text-danger small mt-1">{% for error in form.requires_login.errors %}{{ error }}{% endfor %}</div>
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
                     </div>

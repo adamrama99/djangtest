@@ -123,6 +123,14 @@
         </li>
 
         <li class="nav-item">
+          <a href="{% url 'user_never_login_list' %}"
+            class="nav-link {% if request.resolver_match.url_name == 'user_never_login_list' %}active{% endif %}">
+            <i class="nav-icon bi bi-person-x"></i>
+            <p>User Belum Login</p>
+          </a>
+        </li>
+
+        <li class="nav-item">
           <a href="{% url 'edit_history_list' %}"
             class="nav-link {% if request.resolver_match.url_name == 'edit_history_list' %}active{% endif %}">
             <i class="nav-icon bi bi-clock-history"></i>

@@ -46,6 +46,27 @@ class Dokumentator(models.Model):
     def __str__(self):
         return self.name
 
+
+class UserLoginRequirement(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="login_requirement",
+    )
+    requires_login = models.BooleanField(default=True, verbose_name="Perlu Login")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["user__username"]
+        verbose_name = "User Login Requirement"
+        verbose_name_plural = "User Login Requirements"
+
+    def __str__(self):
+        status = "Perlu login" if self.requires_login else "Tidak perlu login"
+        return f"{self.user} - {status}"
+
+
 class DocumentationRequest(models.Model):
     STATUS_CHOICES = [
         ('TODO', 'To Do'),

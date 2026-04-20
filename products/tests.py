@@ -26,6 +26,7 @@ from .models import (
     NamaPerangkat,
     Requirement,
     TakeoutAlertRule,
+    UserLoginRequirement,
     ViewPhoto,
     cameratype,
 )
@@ -783,6 +784,123 @@ class JadwalTayangReportTests(TestCase):
         self.assertContains(response, "Brand Report Active B")
         self.assertNotContains(response, "Brand Report Active A")
         self.assertEqual(response.context["active_count"], 1)
+
+
+@override_settings(ALLOWED_HOSTS=["testserver", "localhost"])
+class UserLoginRequirementTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = get_user_model().objects.create_superuser(
+            username="login_req_admin",
+            email="login_req_admin@example.com",
+            password="password123",
+        )
+        cls.needs_login = get_user_model().objects.create_user(
+            username="needs_login",
+            first_name="Need",
+            last_name="Login",
+            email="needs_login@example.com",
+            password="password123",
+        )
+        cls.not_required = get_user_model().objects.create_user(
+            username="service_account",
+            email="service@example.com",
+            password="password123",
+        )
+        UserLoginRequirement.objects.create(user=cls.not_required, requires_login=False)
+        cls.already_logged_in = get_user_model().objects.create_user(
+            username="already_logged_in",
+            email="already@example.com",
+            password="password123",
+            last_login=timezone.now(),
+        )
+        cls.inactive_user = get_user_model().objects.create_user(
+            username="inactive_never_login",
+            email="inactive@example.com",
+            password="password123",
+            is_active=False,
+        )
+
+    def setUp(self):
+        self.client.force_login(self.admin)
+
+    def test_login_status_page_lists_required_users_with_counts(self):
+        response = self.client.get(reverse("user_never_login_list"))
+
+        self.assertEqual(response.status_code, 200)
+        usernames = set(response.context["users"].values_list("username", flat=True))
+        self.assertIn("needs_login", usernames)
+        self.assertIn("already_logged_in", usernames)
+        self.assertIn("inactive_never_login", usernames)
+        self.assertNotIn("service_account", usernames)
+        self.assertEqual(response.context["login_required_count"], len(usernames))
+        self.assertEqual(
+            response.context["never_login_count"],
+            response.context["users"].filter(last_login__isnull=True).count(),
+        )
+        self.assertContains(response, "needs_login@example.com")
+        self.assertContains(response, "already@example.com")
+        self.assertContains(response, "inactive@example.com")
+        self.assertContains(response, "Last Login")
+        self.assertContains(
+            response,
+            f"{response.context['never_login_count']}/{response.context['login_required_count']} user belum login",
+        )
+        self.assertNotContains(response, "Date Joined")
+        self.assertNotContains(response, "service@example.com")
+
+    def test_user_form_can_mark_user_as_not_required_to_login(self):
+        response = self.client.post(
+            reverse("user_edit", args=[self.needs_login.pk]),
+            data={
+                "username": self.needs_login.username,
+                "first_name": self.needs_login.first_name,
+                "last_name": self.needs_login.last_name,
+                "email": self.needs_login.email,
+                "is_active": "on",
+            },
+        )
+
+        self.assertRedirects(response, reverse("user_list"))
+        self.assertFalse(self.needs_login.login_requirement.requires_login)
+
+        never_login_response = self.client.get(reverse("user_never_login_list"))
+        usernames = set(never_login_response.context["users"].values_list("username", flat=True))
+        self.assertNotIn("needs_login", usernames)
+
+    def test_user_list_can_toggle_login_requirement_inline(self):
+        list_response = self.client.get(reverse("user_list"))
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertContains(list_response, "user-login-required-toggle")
+        self.assertContains(
+            list_response,
+            reverse("user_update_login_requirement", args=[self.needs_login.pk]),
+        )
+
+        response = self.client.post(
+            reverse("user_update_login_requirement", args=[self.needs_login.pk]),
+            {"requires_login": "false"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertJSONEqual(response.content, {"success": True, "requires_login": False})
+        self.assertFalse(
+            UserLoginRequirement.objects.get(user=self.needs_login).requires_login
+        )
+
+        response = self.client.post(
+            reverse("user_update_login_requirement", args=[self.needs_login.pk]),
+            {"requires_login": "true"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertJSONEqual(response.content, {"success": True, "requires_login": True})
+        self.assertTrue(
+            UserLoginRequirement.objects.get(user=self.needs_login).requires_login
+        )
 
 
 @override_settings(ALLOWED_HOSTS=["testserver", "localhost"])

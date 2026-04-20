@@ -6,7 +6,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponse, HttpResponseForbidden
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import BooleanField, Case, Exists, OuterRef, Q, Value, When
 from django.template.loader import render_to_string
 from django.utils import timezone
 from .models import (
@@ -15,6 +15,7 @@ from .models import (
     MaintenanceRequest, NamaPerangkat, InventoryItem,
     JadwalTayang, JadwalTayangFotoTayang, JadwalTayangBuktiPlaylist, JadwalTayangFotoTakeout,
     TakeoutAlertRule,
+    UserLoginRequirement,
 )
 from .forms import (
     DocumentationRequestForm,
@@ -190,6 +191,27 @@ def _contains_search_value(search_query, *values):
         if normalized_query in str(value).casefold():
             return True
     return False
+
+
+def _annotate_login_required_flag(queryset):
+    return queryset.annotate(
+        login_required_flag=Case(
+            When(login_requirement__requires_login=False, then=Value(False)),
+            default=Value(True),
+            output_field=BooleanField(),
+        )
+    )
+
+
+def _user_search_filter(search_query):
+    return (
+        _pk_search_q(search_query)
+        | Q(username__icontains=search_query)
+        | Q(first_name__icontains=search_query)
+        | Q(last_name__icontains=search_query)
+        | Q(email__icontains=search_query)
+        | Q(groups__name__icontains=search_query)
+    )
 
 
 def _get_or_create_dokumentator_for_user(user):
@@ -1516,19 +1538,51 @@ def jadwal_tayang_upload_photos(request, pk):
 @admin_required
 def user_list(request):
     search_query = _get_search_query(request)
-    users = User.objects.all().prefetch_related("groups").order_by("username")
+    users = _annotate_login_required_flag(
+        User.objects.select_related("login_requirement").prefetch_related("groups")
+    ).order_by("username")
     if search_query:
-        users = users.filter(
-            _pk_search_q(search_query)
-            | Q(username__icontains=search_query)
-            | Q(first_name__icontains=search_query)
-            | Q(last_name__icontains=search_query)
-            | Q(email__icontains=search_query)
-            | Q(groups__name__icontains=search_query)
-        ).distinct()
+        users = users.filter(_user_search_filter(search_query)).distinct()
     return render(request, "products/user_list.html", {
         "users": users,
         **_search_context(request, "Cari username, nama, email, atau role"),
+    })
+
+
+@admin_required
+def user_never_login_list(request):
+    search_query = _get_search_query(request)
+    users = _annotate_login_required_flag(
+        User.objects.select_related("login_requirement").prefetch_related("groups")
+    ).filter(
+        login_required_flag=True,
+    ).order_by("username")
+    if search_query:
+        users = users.filter(_user_search_filter(search_query)).distinct()
+    login_required_count = users.count()
+    never_login_count = users.filter(last_login__isnull=True).count()
+    return render(request, "products/user_never_login_list.html", {
+        "users": users,
+        "login_required_count": login_required_count,
+        "never_login_count": never_login_count,
+        **_search_context(request, "Cari username, nama, email, atau role"),
+    })
+
+
+@admin_required
+def user_update_login_requirement(request, pk):
+    if request.method != "POST":
+        return HttpResponseForbidden("POST only.")
+
+    user_obj = get_object_or_404(User, pk=pk)
+    requires_login = request.POST.get("requires_login") == "true"
+    UserLoginRequirement.objects.update_or_create(
+        user=user_obj,
+        defaults={"requires_login": requires_login},
+    )
+    return JsonResponse({
+        "success": True,
+        "requires_login": requires_login,
     })
 
 

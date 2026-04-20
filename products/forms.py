@@ -9,6 +9,7 @@ from .models import (
     JadwalTayang,
     Lokasi,
     TakeoutAlertRule,
+    UserLoginRequirement,
 )
 
 User = get_user_model()
@@ -203,10 +204,17 @@ class UserForm(forms.ModelForm):
         widget=forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
         label="Role",
     )
+    requires_login = forms.BooleanField(
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        label="Perlu Login",
+        help_text="Matikan untuk akun yang tidak wajib login agar tidak muncul di halaman user belum pernah login.",
+    )
 
     class Meta:
         model = User
-        fields = ["username", "first_name", "last_name", "email", "is_active", "groups"]
+        fields = ["username", "first_name", "last_name", "email", "is_active", "requires_login", "groups"]
         widgets = {
             "username": forms.TextInput(attrs={"class": "form-control", "placeholder": "Username"}),
             "first_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "First name"}),
@@ -219,6 +227,11 @@ class UserForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if self.instance and self.instance.pk:
             self.fields["password"].help_text = "Kosongkan jika tidak ingin mengubah password."
+            login_requirement = UserLoginRequirement.objects.filter(user=self.instance).first()
+            self.initial.setdefault(
+                "requires_login",
+                login_requirement.requires_login if login_requirement else True,
+            )
         else:
             self.fields["password"].required = True
             self.fields["password"].widget.attrs["placeholder"] = "Enter password"
@@ -231,4 +244,8 @@ class UserForm(forms.ModelForm):
         if commit:
             user.save()
             self.save_m2m()
+            UserLoginRequirement.objects.update_or_create(
+                user=user,
+                defaults={"requires_login": self.cleaned_data.get("requires_login", False)},
+            )
         return user
