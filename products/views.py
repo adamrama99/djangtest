@@ -12,7 +12,7 @@ from django.utils import timezone
 from .models import (
     DocumentationRequest, LEDType, Requirement, ViewPhoto, cameratype,
     BrandMateri, Lokasi, Dokumentator, DocumentationRequestLokasiAssignment, EditHistory,
-    MaintenanceRequest, NamaPerangkat,
+    MaintenanceRequest,
     JadwalTayang, JadwalTayangFotoTayang, JadwalTayangBuktiPlaylist, JadwalTayangFotoTakeout,
     TakeoutAlertRule,
     UserLoginRequirement,
@@ -907,7 +907,6 @@ MASTER_DATA_REGISTRY = {
     "requirement": {"model": Requirement, "label": "Requirement", "icon": "bi-check2-square"},
     "view-photo": {"model": ViewPhoto, "label": "View Photo", "icon": "bi-camera"},
     "camera-type": {"model": cameratype, "label": "Jenis Kamera", "icon": "bi-webcam"},
-    "nama-perangkat": {"model": NamaPerangkat, "label": "Jenis Produk Maintenance", "icon": "bi-display"},
 }
 
 
@@ -1152,7 +1151,7 @@ def maint_request_list(request):
     requests_qs = _filter_maint_requests_for_user(
         MaintenanceRequest.objects.select_related(
         "submitted_by", "brand_materi"
-    ).prefetch_related("lokasi", "nama_perangkat", "pelaksana").order_by("-id")
+    ).prefetch_related("lokasi", "jenis_led", "pelaksana").order_by("-id")
         ,
         request.user,
     )
@@ -1168,7 +1167,7 @@ def maint_request_list(request):
             | Q(submitted_by__username__icontains=search_query)
             | Q(submitted_by__first_name__icontains=search_query)
             | Q(submitted_by__last_name__icontains=search_query)
-            | Q(nama_perangkat__name__icontains=search_query)
+            | Q(jenis_led__name__icontains=search_query)
             | Q(pelaksana__name__icontains=search_query)
         ).distinct()
     return render(request, "products/maint_request_list.html", {
@@ -1206,7 +1205,7 @@ def maint_request_detail(request, pk):
         MaintenanceRequest.objects.select_related(
             "submitted_by", "brand_materi"
         ).prefetch_related(
-            "lokasi", "nama_perangkat", "pelaksana"
+            "lokasi", "jenis_led", "pelaksana"
         ),
         pk=pk,
     )

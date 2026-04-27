@@ -8,13 +8,13 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mysite.settings')
 sys.path.insert(0, os.path.dirname(__file__))
 django.setup()
 
-from products.models import NamaPerangkat, InventoryItem
+from products.models import LEDType, InventoryItem
 
-# Nama Perangkat
-perangkat_list = ['Videotrone', 'Neon Box', 'Billboard']
-for name in perangkat_list:
-    obj, created = NamaPerangkat.objects.get_or_create(name=name)
-    print(f"  {'Created' if created else 'Exists'}: NamaPerangkat '{name}'")
+# Jenis Produk
+jenis_produk_list = ['Mobile LED', 'LED Statis', 'Outdoor LED', 'Billboard', 'Banner', 'Videotrone', 'Neon Box']
+for name in jenis_produk_list:
+    obj, created = LEDType.objects.get_or_create(name=name)
+    print(f"  {'Created' if created else 'Exists'}: LEDType '{name}'")
 
 # Inventory Items by group
 inventory_data = {

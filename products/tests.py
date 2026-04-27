@@ -23,7 +23,6 @@ from .models import (
     JadwalTayangFotoTakeout,
     LEDType,
     Lokasi,
-    NamaPerangkat,
     Requirement,
     TakeoutAlertRule,
     UserLoginRequirement,
@@ -223,11 +222,11 @@ class RequestCreationPermissionTests(TestCase):
         cls.lokasi = Lokasi.objects.create(name="Lokasi Executor Access")
         cls.lokasi_other = Lokasi.objects.create(name="Lokasi Hidden Executor")
         cls.led_type = LEDType.objects.create(name="LED Executor Access")
+        cls.maint_led_type = LEDType.objects.create(name="Panel Executor Access")
+        cls.maint_led_type_other = LEDType.objects.create(name="Panel Hidden Executor")
         cls.requirement = Requirement.objects.create(name="Requirement Executor Access")
         cls.view_photo = ViewPhoto.objects.create(name="View Executor Access")
         cls.camera_type = cameratype.objects.create(name="Camera Executor Access")
-        cls.nama_perangkat = NamaPerangkat.objects.create(name="Panel Executor Access")
-        cls.nama_perangkat_other = NamaPerangkat.objects.create(name="Panel Hidden Executor")
         cls.executor_dokumentator = Dokumentator.objects.create(name="Executor Only")
         cls.dokumentator_other = Dokumentator.objects.create(name="Dokumentator Lain")
         cls.dokumentator_extra = Dokumentator.objects.create(name="Dokumentator Extra")
@@ -270,7 +269,7 @@ class RequestCreationPermissionTests(TestCase):
             tanggal_deadline=date.today() + timedelta(days=1),
             deskripsi_pekerjaan="Maintenance untuk akses executor",
         )
-        cls.maint_request.nama_perangkat.set([cls.nama_perangkat])
+        cls.maint_request.jenis_led.set([cls.maint_led_type])
         cls.maint_request.pelaksana.set([cls.executor_dokumentator])
 
         cls.maint_request_other = MaintenanceRequest.objects.create(
@@ -281,7 +280,7 @@ class RequestCreationPermissionTests(TestCase):
             tanggal_deadline=date.today() + timedelta(days=2),
             deskripsi_pekerjaan="Maintenance tersembunyi",
         )
-        cls.maint_request_other.nama_perangkat.set([cls.nama_perangkat_other])
+        cls.maint_request_other.jenis_led.set([cls.maint_led_type_other])
         cls.maint_request_other.pelaksana.set([cls.dokumentator_other])
 
         cls.jadwal_tayang = JadwalTayang.objects.create(
@@ -321,6 +320,17 @@ class RequestCreationPermissionTests(TestCase):
 
         self.assertEqual(doc_response.status_code, 200)
         self.assertEqual(maint_response.status_code, 200)
+
+    def test_maintenance_create_page_uses_led_type_master_for_jenis_produk(self):
+        self.client.force_login(self.requester)
+
+        response = self.client.get(reverse("maint_request_create"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Jenis Produk")
+        self.assertContains(response, "LED Executor Access")
+        self.assertContains(response, "Panel Executor Access")
+        self.assertNotContains(response, "Nama Perangkat")
 
     def test_executor_does_not_see_create_shortcuts(self):
         self.client.force_login(self.executor)
@@ -1192,12 +1202,12 @@ class ListSearchTests(TestCase):
         cls.lokasi_target = Lokasi.objects.create(name="Lokasi Search Target")
         cls.lokasi_other = Lokasi.objects.create(name="Lokasi Search Other")
         cls.led_type = LEDType.objects.create(name="LED Search")
+        cls.maint_led_type_target = LEDType.objects.create(name="Panel Search Target")
+        cls.maint_led_type_other = LEDType.objects.create(name="Panel Search Other")
         cls.requirement = Requirement.objects.create(name="Requirement Search")
         cls.view_photo = ViewPhoto.objects.create(name="View Search")
         cls.camera_type = cameratype.objects.create(name="Camera Search")
         cls.dokumentator = Dokumentator.objects.create(name="Dokumentator Search")
-        cls.nama_perangkat_target = NamaPerangkat.objects.create(name="Panel Search Target")
-        cls.nama_perangkat_other = NamaPerangkat.objects.create(name="Panel Search Other")
 
         cls.doc_request_target = DocumentationRequest.objects.create(
             submitted_by=cls.user,
@@ -1233,7 +1243,7 @@ class ListSearchTests(TestCase):
             tanggal_deadline=date.today() + timedelta(days=1),
             deskripsi_pekerjaan="Perbaikan panel target",
         )
-        cls.maint_request_target.nama_perangkat.set([cls.nama_perangkat_target])
+        cls.maint_request_target.jenis_led.set([cls.maint_led_type_target])
         cls.maint_request_target.pelaksana.set([cls.dokumentator])
 
         cls.maint_request_other = MaintenanceRequest.objects.create(
@@ -1244,7 +1254,7 @@ class ListSearchTests(TestCase):
             tanggal_deadline=date.today() + timedelta(days=2),
             deskripsi_pekerjaan="Perbaikan panel other",
         )
-        cls.maint_request_other.nama_perangkat.set([cls.nama_perangkat_other])
+        cls.maint_request_other.jenis_led.set([cls.maint_led_type_other])
 
         start_at = timezone.now()
         cls.jadwal_target = JadwalTayang.objects.create(

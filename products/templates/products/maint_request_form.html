@@ -130,15 +130,15 @@
                     <div class="field-container">
                         <label class="form-label fw-bold mb-2">Jenis Produk <span class="text-danger">*</span></label>
                         <div class="choice-grid">
-                            {% for checkbox in form.nama_perangkat %}
+                            {% for checkbox in form.jenis_led %}
                             <div class="form-check">
                                 {{ checkbox.tag }}
                                 <label class="form-check-label" for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label>
                             </div>
                             {% endfor %}
                         </div>
-                        {% if form.nama_perangkat.errors %}
-                        <div class="text-danger small mt-1">{% for error in form.nama_perangkat.errors %}{{ error }}{% endfor %}</div>
+                        {% if form.jenis_led.errors %}
+                        <div class="text-danger small mt-1">{% for error in form.jenis_led.errors %}{{ error }}{% endfor %}</div>
                         {% endif %}
                     </div>
 

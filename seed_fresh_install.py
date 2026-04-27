@@ -18,7 +18,6 @@ from products.models import (
     Requirement,
     ViewPhoto,
     Dokumentator,
-    NamaPerangkat,
     InventoryItem,
     TakeoutAlertRule,
 )
@@ -27,11 +26,10 @@ OPTION_DATA = {
     'brand_materi': ['Samsung', 'Shoppee', 'samsung'],
     'lokasi': ['Jakpus', 'WTC'],
     'camera_types': ['Iphone', 'Android', 'Kamera DSLR'],
-    'led_types': ['Mobile LED', 'LED Statis', 'Outdoor LED', 'Billboard', 'Banner'],
+    'led_types': ['Mobile LED', 'LED Statis', 'Outdoor LED', 'Billboard', 'Banner', 'Videotrone', 'Neon Box'],
     'requirements': ['HIGHRESS', 'SIANG', 'MALAM', 'TIME STAMP', 'NON TIME STAMP'],
     'view_photos': ['PORTRAIT', 'LANDSCAPE', 'JARAK DEKAT', 'JARAK SEDANG', 'JARAK JAUH'],
     'dokumentators': ['Surachman', 'Asep', 'executor'],
-    'nama_perangkat': ['Videotrone', 'Neon Box', 'Billboard'],
 }
 
 INVENTORY_ITEMS = {
@@ -92,7 +90,6 @@ def clear_option_data():
         Requirement,
         ViewPhoto,
         Dokumentator,
-        NamaPerangkat,
         InventoryItem,
         TakeoutAlertRule,
     ]:
@@ -266,10 +263,6 @@ def seed_option_data():
     for name in OPTION_DATA['dokumentators']:
         obj, created = Dokumentator.objects.get_or_create(name=name)
         print(f'  {"Created" if created else "Exists"}: Dokumentator {name}')
-
-    for name in OPTION_DATA['nama_perangkat']:
-        obj, created = NamaPerangkat.objects.get_or_create(name=name)
-        print(f'  {"Created" if created else "Exists"}: NamaPerangkat {name}')
 
     for group_name, items in INVENTORY_ITEMS.items():
         for item_name in items:

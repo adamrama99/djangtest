@@ -60,7 +60,7 @@
                     </td>
                     <td>{{ req.lokasi_display }}</td>
                     <td>
-                        {% for p in req.nama_perangkat.all %}
+                        {% for p in req.jenis_led.all %}
                         <span class="badge text-bg-danger">{{ p.name }}</span>
                         {% empty %}-{% endfor %}
                     </td>

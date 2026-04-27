@@ -5,7 +5,6 @@ from django.utils import timezone
 from .models import (
     DocumentationRequest,
     MaintenanceRequest,
-    InventoryItem,
     JadwalTayang,
     Lokasi,
     TakeoutAlertRule,
@@ -19,7 +18,6 @@ def _validate_image_size(foto):
     if foto and hasattr(foto, "size") and foto.size > 10 * 1024 * 1024:
         raise forms.ValidationError("Ukuran file maksimal 10 MB.")
     return foto
-
 
 class DocumentationRequestForm(forms.ModelForm):
     class Meta:
@@ -67,7 +65,7 @@ class MaintenanceRequestForm(forms.ModelForm):
             "tanggal_deadline",
             "brand_materi",
             "lokasi",
-            "nama_perangkat",
+            "jenis_led",
             "deskripsi_pekerjaan",
             "foto_kerusakan",
         ]
@@ -78,7 +76,7 @@ class MaintenanceRequestForm(forms.ModelForm):
             "tanggal_deadline": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
             "brand_materi": forms.Select(attrs={"class": "form-select select2-field"}),
             "lokasi": forms.SelectMultiple(attrs={"class": "form-select select2-field select2-tags", "multiple": "multiple"}),
-            "nama_perangkat": forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
+            "jenis_led": forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
             "deskripsi_pekerjaan": forms.Textarea(attrs={"class": "form-control", "rows": 4, "placeholder": "Jelaskan detail pekerjaan maintenance / troubleshoot..."}),
             "foto_kerusakan": forms.ClearableFileInput(attrs={"class": "form-control", "accept": "image/*"}),
         }
@@ -87,10 +85,10 @@ class MaintenanceRequestForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["brand_materi"].queryset = self.fields["brand_materi"].queryset.order_by("name")
         self.fields["lokasi"].queryset = self.fields["lokasi"].queryset.order_by("name")
-        self.fields["nama_perangkat"].queryset = self.fields["nama_perangkat"].queryset.order_by("name")
+        self.fields["jenis_led"].queryset = self.fields["jenis_led"].queryset.order_by("name")
         self.fields["brand_materi"].required = True
         self.fields["lokasi"].required = True
-        self.fields["nama_perangkat"].label = "Jenis Produk"
+        self.fields["jenis_led"].label = "Jenis Produk"
         self.fields["foto_kerusakan"].required = False
 
     def clean_foto_kerusakan(self):

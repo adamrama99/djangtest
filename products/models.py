@@ -205,13 +205,6 @@ class EditHistory(models.Model):
         return "doc_request_detail"
 
 
-class NamaPerangkat(models.Model):
-    name = models.CharField(max_length=100, unique=True)
-
-    def __str__(self):
-        return self.name
-
-
 class InventoryItem(models.Model):
     GROUP_CHOICES = [
         ('MING', 'Inventory MING'),
@@ -255,7 +248,7 @@ class MaintenanceRequest(models.Model):
         verbose_name="Brand / Materi",
     )
     lokasi = models.ManyToManyField(Lokasi, blank=True, verbose_name="Lokasi")
-    nama_perangkat = models.ManyToManyField(NamaPerangkat, verbose_name="Jenis Produk")
+    jenis_led = models.ManyToManyField(LEDType, verbose_name="Jenis Produk")
     inventory_items = models.ManyToManyField(InventoryItem, blank=True, verbose_name="Inventory")
     deskripsi_pekerjaan = models.TextField("Deskripsi Pekerjaan")
     foto_kerusakan = models.ImageField("Foto Kerusakan", upload_to="maintenance_photos/", blank=True, null=True)
@@ -277,6 +270,13 @@ class MaintenanceRequest(models.Model):
 
     def lokasi_display(self):
         names = self.lokasi_names()
+        return ", ".join(names) if names else "-"
+
+    def jenis_produk_names(self):
+        return list(self.jenis_led.order_by("name").values_list("name", flat=True))
+
+    def jenis_produk_display(self):
+        names = self.jenis_produk_names()
         return ", ".join(names) if names else "-"
 
 
