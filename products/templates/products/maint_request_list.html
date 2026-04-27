@@ -31,6 +31,9 @@
                 <tr>
                     <th style="width:50px">#</th>
                     <th>Submitted</th>
+                    <th>Brand / Materi</th>
+                    <th>Lokasi</th>
+                    <th>Jenis Produk</th>
                     <th>Pemohon</th>
                     <th>Departement</th>
                     <th>Perangkat</th>
@@ -49,6 +52,21 @@
                 <tr data-id="{{ req.id }}">
                     <td class="text-muted">{{ req.id }}</td>
                     <td class="text-muted small">{{ req.created_at|date:"d/m/Y H:i" }}</td>
+                    <td>
+                        {% if req.brand_materi %}
+                        <div class="fw-semibold">{{ req.brand_materi.name }}</div>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td>{{ req.lokasi_display }}</td>
+                    <td>
+                        {% if req.jenis_led %}
+                        <span class="badge text-bg-warning">{{ req.jenis_led.name }}</span>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
                     <td>
                         <div class="fw-semibold">{{ req.nama_pemohon }}</div>
                         <div class="text-muted small">{{ req.submitted_by.get_full_name|default:req.submitted_by.username }}</div>
@@ -117,7 +135,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="{% if can_manage_pelaksana %}11{% else %}10{% endif %}" class="text-center text-muted py-5">
+                    <td colspan="{% if can_manage_pelaksana %}14{% else %}13{% endif %}" class="text-center text-muted py-5">
                         <i class="bi bi-inbox display-6 d-block mb-2"></i>
                         {% if search_active %}
                         Tidak ada maintenance request yang cocok dengan "{{ search_query }}". <a href="{% url 'maint_request_list' %}">Reset pencarian</a>.

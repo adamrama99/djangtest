@@ -19,15 +19,6 @@
     .form-check { margin-bottom: 0; padding-top: 5px; padding-bottom: 5px; }
     .form-check-label { cursor: pointer; font-weight: normal !important; }
     .field-container { margin-bottom: 25px; }
-    .inventory-group-header {
-        font-size: 0.85rem;
-        font-weight: 600;
-        color: #ffc107;
-        margin-bottom: 8px;
-        padding-bottom: 4px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    .inventory-group { margin-bottom: 15px; }
 </style>
 {% endblock %}
 
@@ -107,7 +98,49 @@
                         </div>
                     </div>
 
+                    <div class="row">
+                        <div class="col-lg-6 mb-3">
+                            <label for="{{ form.brand_materi.id_for_label }}" class="form-label fw-bold">
+                                Brand / Materi <span class="text-danger">*</span>
+                            </label>
+                            {{ form.brand_materi }}
+                            {% if form.brand_materi.errors %}
+                            <div class="text-danger small mt-1">{% for error in form.brand_materi.errors %}{{ error }}{% endfor %}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-lg-6 mb-3">
+                            <label for="{{ form.lokasi.id_for_label }}" class="form-label fw-bold">
+                                Lokasi <span class="text-danger">*</span>
+                            </label>
+                            {{ form.lokasi }}
+                            {% if form.lokasi.errors %}
+                            <div class="text-danger small mt-1">{% for error in form.lokasi.errors %}{{ error }}{% endfor %}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-12">
+                            <div class="text-muted small mt-1">
+                                <i class="bi bi-info-circle me-1"></i>Anda bisa pilih satu atau beberapa lokasi untuk request maintenance ini.
+                            </div>
+                        </div>
+                    </div>
+
                     <hr class="my-4 opacity-25">
+
+                    <div class="field-container">
+                        <label class="form-label fw-bold mb-2">Jenis Produk <span class="text-danger">*</span></label>
+                        <div class="choice-grid">
+                            {% for radio in form.jenis_led %}
+                            <div class="form-check">
+                                {{ radio.tag }}
+                                <label class="form-check-label" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% if form.jenis_led.errors %}
+                        <div class="text-danger small mt-1">{% for error in form.jenis_led.errors %}{{ error }}{% endfor %}</div>
+                        {% endif %}
+                    </div>
 
                     <!-- Nama Perangkat -->
                     <div class="field-container">
@@ -123,32 +156,6 @@
                         {% if form.nama_perangkat.errors %}
                         <div class="text-danger small mt-1">{% for error in form.nama_perangkat.errors %}{{ error }}{% endfor %}</div>
                         {% endif %}
-                    </div>
-
-                    <!-- Inventory Items (Grouped) -->
-                    <div class="field-container">
-                        <label class="form-label fw-bold mb-2">Inventory / Lokasi</label>
-                        {% for group_code, group_data in inventory_grouped.items %}
-                        <div class="inventory-group">
-                            <div class="inventory-group-header">
-                                <i class="bi bi-geo-alt me-1"></i>{{ group_data.label }}
-                            </div>
-                            <div class="choice-grid">
-                                {% for item in group_data.items %}
-                                <div class="form-check">
-                                    <input type="checkbox" name="inventory_items" value="{{ item.id }}"
-                                           class="form-check-input" id="inv_{{ item.id }}"
-                                           {% if item.id in form.inventory_items.value %}checked{% endif %}>
-                                    <label class="form-check-label" for="inv_{{ item.id }}">{{ item.name }}</label>
-                                </div>
-                                {% endfor %}
-                            </div>
-                        </div>
-                        {% empty %}
-                        <div class="text-muted small">
-                            <i class="bi bi-info-circle me-1"></i>Belum ada data inventory. Admin dapat menambahkan melalui Django Admin.
-                        </div>
-                        {% endfor %}
                     </div>
 
                     <hr class="my-4 opacity-25">

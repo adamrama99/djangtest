@@ -247,6 +247,21 @@ class MaintenanceRequest(models.Model):
     departement = models.CharField("Departement", max_length=150)
     tanggal_permintaan = models.DateField("Tanggal Permintaan")
     tanggal_deadline = models.DateField("Tanggal Deadline")
+    brand_materi = models.ForeignKey(
+        BrandMateri,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Brand / Materi",
+    )
+    lokasi = models.ManyToManyField(Lokasi, blank=True, verbose_name="Lokasi")
+    jenis_led = models.ForeignKey(
+        LEDType,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Jenis Produk",
+    )
     nama_perangkat = models.ManyToManyField(NamaPerangkat, verbose_name="Nama Perangkat")
     inventory_items = models.ManyToManyField(InventoryItem, blank=True, verbose_name="Inventory")
     deskripsi_pekerjaan = models.TextField("Deskripsi Pekerjaan")
@@ -263,6 +278,13 @@ class MaintenanceRequest(models.Model):
 
     def __str__(self):
         return f"{self.nama_pemohon} - {self.tanggal_permintaan}"
+
+    def lokasi_names(self):
+        return list(self.lokasi.order_by("name").values_list("name", flat=True))
+
+    def lokasi_display(self):
+        names = self.lokasi_names()
+        return ", ".join(names) if names else "-"
 
 
 class JadwalTayang(models.Model):

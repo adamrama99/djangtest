@@ -45,27 +45,22 @@
                             <td>{{ req.tanggal_deadline|date:"d M Y" }}</td>
                         </tr>
                         <tr>
+                            <th class="bg-body-secondary">Brand / Materi</th>
+                            <td>{{ req.brand_materi|default:"-" }}</td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">Lokasi</th>
+                            <td>{{ req.lokasi_display }}</td>
+                        </tr>
+                        <tr>
+                            <th class="bg-body-secondary">Jenis Produk</th>
+                            <td>{{ req.jenis_led.name|default:"-" }}</td>
+                        </tr>
+                        <tr>
                             <th class="bg-body-secondary">Nama Perangkat</th>
                             <td>
                                 {% for p in req.nama_perangkat.all %}
                                 <span class="badge text-bg-danger">{{ p.name }}</span>
-                                {% empty %}
-                                -
-                                {% endfor %}
-                            </td>
-                        </tr>
-                        <tr>
-                            <th class="bg-body-secondary">Inventory / Lokasi</th>
-                            <td>
-                                {% for group_label, items in inventory_grouped.items %}
-                                <div class="mb-2">
-                                    <div class="fw-semibold text-warning small">{{ group_label }}</div>
-                                    <div>
-                                        {% for item_name in items %}
-                                        <span class="badge text-bg-secondary">{{ item_name }}</span>
-                                        {% endfor %}
-                                    </div>
-                                </div>
                                 {% empty %}
                                 -
                                 {% endfor %}

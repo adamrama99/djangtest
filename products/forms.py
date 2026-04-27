@@ -65,8 +65,10 @@ class MaintenanceRequestForm(forms.ModelForm):
             "departement",
             "tanggal_permintaan",
             "tanggal_deadline",
+            "brand_materi",
+            "lokasi",
+            "jenis_led",
             "nama_perangkat",
-            "inventory_items",
             "deskripsi_pekerjaan",
             "foto_kerusakan",
         ]
@@ -75,15 +77,24 @@ class MaintenanceRequestForm(forms.ModelForm):
             "departement": forms.TextInput(attrs={"class": "form-control", "placeholder": "Departement pemohon"}),
             "tanggal_permintaan": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
             "tanggal_deadline": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "brand_materi": forms.Select(attrs={"class": "form-select select2-field"}),
+            "lokasi": forms.SelectMultiple(attrs={"class": "form-select select2-field select2-tags", "multiple": "multiple"}),
+            "jenis_led": forms.RadioSelect(attrs={"class": "form-check-input"}),
             "nama_perangkat": forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
-            "inventory_items": forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
             "deskripsi_pekerjaan": forms.Textarea(attrs={"class": "form-control", "rows": 4, "placeholder": "Jelaskan detail pekerjaan maintenance / troubleshoot..."}),
             "foto_kerusakan": forms.ClearableFileInput(attrs={"class": "form-control", "accept": "image/*"}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['foto_kerusakan'].required = False
+        self.fields["brand_materi"].queryset = self.fields["brand_materi"].queryset.order_by("name")
+        self.fields["lokasi"].queryset = self.fields["lokasi"].queryset.order_by("name")
+        self.fields["jenis_led"].queryset = self.fields["jenis_led"].queryset.order_by("name")
+        self.fields["nama_perangkat"].queryset = self.fields["nama_perangkat"].queryset.order_by("name")
+        self.fields["brand_materi"].required = True
+        self.fields["lokasi"].required = True
+        self.fields["jenis_led"].required = True
+        self.fields["foto_kerusakan"].required = False
 
     def clean_foto_kerusakan(self):
         return _validate_image_size(self.cleaned_data.get("foto_kerusakan"))

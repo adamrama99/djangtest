@@ -12,7 +12,7 @@ from django.utils import timezone
 from .models import (
     DocumentationRequest, LEDType, Requirement, ViewPhoto, cameratype,
     BrandMateri, Lokasi, Dokumentator, DocumentationRequestLokasiAssignment, EditHistory,
-    MaintenanceRequest, NamaPerangkat, InventoryItem,
+    MaintenanceRequest, NamaPerangkat,
     JadwalTayang, JadwalTayangFotoTayang, JadwalTayangBuktiPlaylist, JadwalTayangFotoTakeout,
     TakeoutAlertRule,
     UserLoginRequirement,
@@ -1151,14 +1151,17 @@ def maint_request_list(request):
     search_query = _get_search_query(request)
     requests_qs = _filter_maint_requests_for_user(
         MaintenanceRequest.objects.select_related(
-        "submitted_by"
-    ).prefetch_related("nama_perangkat", "inventory_items", "pelaksana").order_by("-id")
+        "submitted_by", "brand_materi", "jenis_led"
+    ).prefetch_related("lokasi", "nama_perangkat", "pelaksana").order_by("-id")
         ,
         request.user,
     )
     if search_query:
         requests_qs = requests_qs.filter(
             _pk_search_q(search_query)
+            | Q(brand_materi__name__icontains=search_query)
+            | Q(lokasi__name__icontains=search_query)
+            | Q(jenis_led__name__icontains=search_query)
             | Q(nama_pemohon__icontains=search_query)
             | Q(departement__icontains=search_query)
             | Q(deskripsi_pekerjaan__icontains=search_query)
@@ -1167,7 +1170,6 @@ def maint_request_list(request):
             | Q(submitted_by__first_name__icontains=search_query)
             | Q(submitted_by__last_name__icontains=search_query)
             | Q(nama_perangkat__name__icontains=search_query)
-            | Q(inventory_items__name__icontains=search_query)
             | Q(pelaksana__name__icontains=search_query)
         ).distinct()
     return render(request, "products/maint_request_list.html", {
@@ -1179,7 +1181,7 @@ def maint_request_list(request):
         "is_executor": _is_executor(request.user),
         "can_manage_pelaksana": _can_manage_service_pelaksana(request.user),
         "can_upload_proof": _can_upload_service_proof(request.user),
-        **_search_context(request, "Cari pemohon, departement, perangkat, inventory, atau dokumentator"),
+        **_search_context(request, "Cari brand, lokasi, jenis produk, pemohon, departement, perangkat, atau dokumentator"),
     })
 
 
@@ -1193,41 +1195,24 @@ def maint_request_create(request):
         form.save_m2m()
         return redirect("maint_request_list")
 
-    # Group inventory items by group for the template
-    inventory_grouped = {}
-    for group_code, group_label in InventoryItem.GROUP_CHOICES:
-        items = InventoryItem.objects.filter(group=group_code).order_by("name")
-        if items.exists():
-            inventory_grouped[group_code] = {
-                "label": group_label,
-                "items": items,
-            }
-
     return render(request, "products/maint_request_form.html", {
         "form": form,
         "title": "Request Maintenance & Troubleshoot LED",
-        "inventory_grouped": inventory_grouped,
     })
 
 
 @login_required
 def maint_request_detail(request, pk):
     maint_request = get_object_or_404(
-        MaintenanceRequest.objects.select_related("submitted_by").prefetch_related(
-            "nama_perangkat", "inventory_items", "pelaksana"
+        MaintenanceRequest.objects.select_related(
+            "submitted_by", "brand_materi", "jenis_led"
+        ).prefetch_related(
+            "lokasi", "nama_perangkat", "pelaksana"
         ),
         pk=pk,
     )
     if not _filter_maint_requests_for_user(MaintenanceRequest.objects.filter(pk=pk), request.user).exists():
         return _forbidden_response(request, "Anda tidak memiliki izin untuk melihat detail request ini.")
-
-    # Group the selected inventory items
-    inventory_grouped = {}
-    for item in maint_request.inventory_items.all():
-        group_label = item.get_group_display()
-        if group_label not in inventory_grouped:
-            inventory_grouped[group_label] = []
-        inventory_grouped[group_label].append(item.name)
     proof_form = MaintenanceRequestProofForm(instance=maint_request)
     can_upload_proof = _can_upload_service_proof(request.user)
 
@@ -1243,7 +1228,6 @@ def maint_request_detail(request, pk):
 
     return render(request, "products/maint_request_detail.html", {
         "req": maint_request,
-        "inventory_grouped": inventory_grouped,
         "proof_form": proof_form,
         "can_upload_proof": can_upload_proof,
         "is_admin": _is_admin(request.user),
