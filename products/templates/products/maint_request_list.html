@@ -36,7 +36,6 @@
                     <th>Jenis Produk</th>
                     <th>Pemohon</th>
                     <th>Departement</th>
-                    <th>Perangkat</th>
                     <th>Tgl Permintaan</th>
                     <th>Tgl Deadline</th>
                     <th>Status</th>
@@ -61,22 +60,15 @@
                     </td>
                     <td>{{ req.lokasi_display }}</td>
                     <td>
-                        {% if req.jenis_led %}
-                        <span class="badge text-bg-warning">{{ req.jenis_led.name }}</span>
-                        {% else %}
-                        -
-                        {% endif %}
+                        {% for p in req.nama_perangkat.all %}
+                        <span class="badge text-bg-danger">{{ p.name }}</span>
+                        {% empty %}-{% endfor %}
                     </td>
                     <td>
                         <div class="fw-semibold">{{ req.nama_pemohon }}</div>
                         <div class="text-muted small">{{ req.submitted_by.get_full_name|default:req.submitted_by.username }}</div>
                     </td>
                     <td>{{ req.departement }}</td>
-                    <td>
-                        {% for p in req.nama_perangkat.all %}
-                        <span class="badge text-bg-danger">{{ p.name }}</span>
-                        {% empty %}-{% endfor %}
-                    </td>
                     <td>
                         <span class="badge text-bg-info">{{ req.tanggal_permintaan|date:"d M Y" }}</span>
                     </td>
@@ -135,7 +127,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="{% if can_manage_pelaksana %}14{% else %}13{% endif %}" class="text-center text-muted py-5">
+                    <td colspan="{% if can_manage_pelaksana %}13{% else %}12{% endif %}" class="text-center text-muted py-5">
                         <i class="bi bi-inbox display-6 d-block mb-2"></i>
                         {% if search_active %}
                         Tidak ada maintenance request yang cocok dengan "{{ search_query }}". <a href="{% url 'maint_request_list' %}">Reset pencarian</a>.

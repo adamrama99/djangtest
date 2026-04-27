@@ -130,22 +130,6 @@
                     <div class="field-container">
                         <label class="form-label fw-bold mb-2">Jenis Produk <span class="text-danger">*</span></label>
                         <div class="choice-grid">
-                            {% for radio in form.jenis_led %}
-                            <div class="form-check">
-                                {{ radio.tag }}
-                                <label class="form-check-label" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% if form.jenis_led.errors %}
-                        <div class="text-danger small mt-1">{% for error in form.jenis_led.errors %}{{ error }}{% endfor %}</div>
-                        {% endif %}
-                    </div>
-
-                    <!-- Nama Perangkat -->
-                    <div class="field-container">
-                        <label class="form-label fw-bold mb-2">Nama Perangkat <span class="text-danger">*</span></label>
-                        <div class="choice-grid">
                             {% for checkbox in form.nama_perangkat %}
                             <div class="form-check">
                                 {{ checkbox.tag }}
@@ -198,4 +182,66 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function initMaintenanceRequestFormSelect2() {
+    const $brand = $('#id_brand_materi');
+    if ($brand.length) {
+      $brand.select2({
+        theme: 'bootstrap-5',
+        placeholder: 'Pilih Brand / Materi...',
+        allowClear: true,
+        width: '100%',
+      });
+    }
+
+    const $lokasi = $('#id_lokasi');
+    if ($lokasi.length) {
+      $lokasi.select2({
+        theme: 'bootstrap-5',
+        placeholder: 'Pilih satu atau beberapa lokasi...',
+        allowClear: true,
+        width: '100%',
+        tags: true,
+        closeOnSelect: false,
+        createTag: function(params) {
+          const term = $.trim(params.term);
+          if (term === '') return null;
+          return { id: '_new_' + term, text: term, newTag: true };
+        },
+        templateResult: function(data) {
+          if (data.newTag) {
+            return $('<span><i class="bi bi-plus-circle me-1 text-success"></i>Tambah: <strong>' + data.text + '</strong></span>');
+          }
+          return data.text;
+        },
+      });
+
+      $lokasi.on('select2:select', function(e) {
+        const data = e.params.data;
+        if (data.id && data.id.toString().startsWith('_new_')) {
+          const csrfToken = document.querySelector('form [name=csrfmiddlewaretoken]')?.value;
+          $.ajax({
+            url: '{% url "ajax_create_lokasi" %}',
+            method: 'POST',
+            data: { name: data.text, csrfmiddlewaretoken: csrfToken },
+            success: function(resp) {
+              if (resp.success) {
+                $lokasi.find('option[value="' + data.id + '"]').remove();
+                $lokasi.append(new Option(resp.name, resp.id, true, true)).trigger('change');
+              }
+            },
+            error: function() {
+              alert('Gagal menambahkan lokasi baru.');
+            }
+          });
+        }
+      });
+    }
+  }
+
+  $(initMaintenanceRequestFormSelect2);
+</script>
 {% endblock %}

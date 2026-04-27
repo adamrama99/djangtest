@@ -54,10 +54,6 @@
                         </tr>
                         <tr>
                             <th class="bg-body-secondary">Jenis Produk</th>
-                            <td>{{ req.jenis_led.name|default:"-" }}</td>
-                        </tr>
-                        <tr>
-                            <th class="bg-body-secondary">Nama Perangkat</th>
                             <td>
                                 {% for p in req.nama_perangkat.all %}
                                 <span class="badge text-bg-danger">{{ p.name }}</span>

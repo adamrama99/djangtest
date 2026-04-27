@@ -907,7 +907,7 @@ MASTER_DATA_REGISTRY = {
     "requirement": {"model": Requirement, "label": "Requirement", "icon": "bi-check2-square"},
     "view-photo": {"model": ViewPhoto, "label": "View Photo", "icon": "bi-camera"},
     "camera-type": {"model": cameratype, "label": "Jenis Kamera", "icon": "bi-webcam"},
-    "nama-perangkat": {"model": NamaPerangkat, "label": "Nama Perangkat", "icon": "bi-display"},
+    "nama-perangkat": {"model": NamaPerangkat, "label": "Jenis Produk Maintenance", "icon": "bi-display"},
 }
 
 
@@ -1151,7 +1151,7 @@ def maint_request_list(request):
     search_query = _get_search_query(request)
     requests_qs = _filter_maint_requests_for_user(
         MaintenanceRequest.objects.select_related(
-        "submitted_by", "brand_materi", "jenis_led"
+        "submitted_by", "brand_materi"
     ).prefetch_related("lokasi", "nama_perangkat", "pelaksana").order_by("-id")
         ,
         request.user,
@@ -1161,7 +1161,6 @@ def maint_request_list(request):
             _pk_search_q(search_query)
             | Q(brand_materi__name__icontains=search_query)
             | Q(lokasi__name__icontains=search_query)
-            | Q(jenis_led__name__icontains=search_query)
             | Q(nama_pemohon__icontains=search_query)
             | Q(departement__icontains=search_query)
             | Q(deskripsi_pekerjaan__icontains=search_query)
@@ -1181,7 +1180,7 @@ def maint_request_list(request):
         "is_executor": _is_executor(request.user),
         "can_manage_pelaksana": _can_manage_service_pelaksana(request.user),
         "can_upload_proof": _can_upload_service_proof(request.user),
-        **_search_context(request, "Cari brand, lokasi, jenis produk, pemohon, departement, perangkat, atau dokumentator"),
+        **_search_context(request, "Cari brand, lokasi, jenis produk, pemohon, departement, atau dokumentator"),
     })
 
 
@@ -1205,7 +1204,7 @@ def maint_request_create(request):
 def maint_request_detail(request, pk):
     maint_request = get_object_or_404(
         MaintenanceRequest.objects.select_related(
-            "submitted_by", "brand_materi", "jenis_led"
+            "submitted_by", "brand_materi"
         ).prefetch_related(
             "lokasi", "nama_perangkat", "pelaksana"
         ),

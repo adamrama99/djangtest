@@ -255,14 +255,7 @@ class MaintenanceRequest(models.Model):
         verbose_name="Brand / Materi",
     )
     lokasi = models.ManyToManyField(Lokasi, blank=True, verbose_name="Lokasi")
-    jenis_led = models.ForeignKey(
-        LEDType,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        verbose_name="Jenis Produk",
-    )
-    nama_perangkat = models.ManyToManyField(NamaPerangkat, verbose_name="Nama Perangkat")
+    nama_perangkat = models.ManyToManyField(NamaPerangkat, verbose_name="Jenis Produk")
     inventory_items = models.ManyToManyField(InventoryItem, blank=True, verbose_name="Inventory")
     deskripsi_pekerjaan = models.TextField("Deskripsi Pekerjaan")
     foto_kerusakan = models.ImageField("Foto Kerusakan", upload_to="maintenance_photos/", blank=True, null=True)
