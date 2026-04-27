@@ -46,7 +46,13 @@
 {% block content %}
 <div class="mb-4">
     <h3 class="mb-0">{{ title }}</h3>
-    <p class="text-muted mb-0">Replace the Google Form with this integrated request system.</p>
+    <p class="text-muted mb-0">
+        {% if is_edit %}
+        Perbarui detail request dokumentasi yang sudah ada.
+        {% else %}
+        Replace the Google Form with this integrated request system.
+        {% endif %}
+    </p>
 </div>
 
 <div class="row">
@@ -105,7 +111,11 @@
                         </div>
                         <div class="col-12">
                             <div class="text-muted small mt-1">
+                                {% if is_edit %}
+                                <i class="bi bi-info-circle me-1"></i>Anda bisa memperbarui satu atau beberapa lokasi pada request ini.
+                                {% else %}
                                 <i class="bi bi-info-circle me-1"></i>Anda bisa pilih satu atau beberapa lokasi. Sistem akan membuat satu request terpisah untuk setiap lokasi yang dipilih.
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -198,7 +208,8 @@
 
                 <div class="card-footer bg-transparent border-top d-flex gap-2">
                     <button type="submit" class="btn btn-primary px-4">
-                        <i class="bi bi-send-fill me-1"></i> Submit Request
+                        <i class="bi {% if is_edit %}bi-save-fill{% else %}bi-send-fill{% endif %} me-1"></i>
+                        {% if is_edit %}Update Request{% else %}Submit Request{% endif %}
                     </button>
                     <a href="{% url 'doc_request_list' %}" class="btn btn-secondary px-4">
                         <i class="bi bi-x-lg me-1"></i> Cancel

@@ -4,6 +4,7 @@ from . import views
 urlpatterns = [
     path("requests/", views.doc_request_list, name="doc_request_list"),
     path("requests/create/", views.doc_request_create, name="doc_request_create"),
+    path("requests/<int:pk>/edit/", views.doc_request_edit, name="doc_request_edit"),
     path("requests/<int:pk>/", views.doc_request_detail, name="doc_request_detail"),
     path("requests/<int:pk>/delete/", views.doc_request_delete, name="doc_request_delete"),
     path("requests/<int:pk>/status/", views.doc_request_update_status, name="doc_request_update_status"),
@@ -16,6 +17,7 @@ urlpatterns = [
     # Maintenance & Troubleshoot LED
     path("maintenance/", views.maint_request_list, name="maint_request_list"),
     path("maintenance/create/", views.maint_request_create, name="maint_request_create"),
+    path("maintenance/<int:pk>/edit/", views.maint_request_edit, name="maint_request_edit"),
     path("maintenance/<int:pk>/", views.maint_request_detail, name="maint_request_detail"),
     path("maintenance/<int:pk>/delete/", views.maint_request_delete, name="maint_request_delete"),
     path("maintenance/<int:pk>/status/", views.maint_request_update_status, name="maint_request_update_status"),

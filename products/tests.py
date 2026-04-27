@@ -321,6 +321,29 @@ class RequestCreationPermissionTests(TestCase):
         self.assertEqual(doc_response.status_code, 200)
         self.assertEqual(maint_response.status_code, 200)
 
+    def test_requester_and_staff_can_open_doc_and_maintenance_edit_pages(self):
+        self.client.force_login(self.requester)
+        requester_doc_response = self.client.get(reverse("doc_request_edit", args=[self.doc_request.pk]))
+        requester_maint_response = self.client.get(reverse("maint_request_edit", args=[self.maint_request.pk]))
+
+        self.client.force_login(self.staff)
+        staff_doc_response = self.client.get(reverse("doc_request_edit", args=[self.doc_request.pk]))
+        staff_maint_response = self.client.get(reverse("maint_request_edit", args=[self.maint_request.pk]))
+
+        self.assertEqual(requester_doc_response.status_code, 200)
+        self.assertEqual(requester_maint_response.status_code, 200)
+        self.assertEqual(staff_doc_response.status_code, 200)
+        self.assertEqual(staff_maint_response.status_code, 200)
+
+    def test_executor_cannot_open_doc_and_maintenance_edit_pages(self):
+        self.client.force_login(self.executor)
+
+        doc_response = self.client.get(reverse("doc_request_edit", args=[self.doc_request.pk]))
+        maint_response = self.client.get(reverse("maint_request_edit", args=[self.maint_request.pk]))
+
+        self.assertEqual(doc_response.status_code, 403)
+        self.assertEqual(maint_response.status_code, 403)
+
     def test_maintenance_create_page_uses_led_type_master_for_jenis_produk(self):
         self.client.force_login(self.requester)
 
@@ -331,6 +354,26 @@ class RequestCreationPermissionTests(TestCase):
         self.assertContains(response, "LED Executor Access")
         self.assertContains(response, "Panel Executor Access")
         self.assertNotContains(response, "Nama Perangkat")
+
+    def test_requester_and_staff_see_edit_shortcuts_but_executor_does_not(self):
+        self.client.force_login(self.requester)
+        requester_doc_list = self.client.get(reverse("doc_request_list"))
+        requester_maint_list = self.client.get(reverse("maint_request_list"))
+
+        self.client.force_login(self.staff)
+        staff_doc_list = self.client.get(reverse("doc_request_list"))
+        staff_maint_list = self.client.get(reverse("maint_request_list"))
+
+        self.client.force_login(self.executor)
+        executor_doc_list = self.client.get(reverse("doc_request_list"))
+        executor_maint_list = self.client.get(reverse("maint_request_list"))
+
+        self.assertContains(requester_doc_list, reverse("doc_request_edit", args=[self.doc_request.pk]))
+        self.assertContains(requester_maint_list, reverse("maint_request_edit", args=[self.maint_request.pk]))
+        self.assertContains(staff_doc_list, reverse("doc_request_edit", args=[self.doc_request.pk]))
+        self.assertContains(staff_maint_list, reverse("maint_request_edit", args=[self.maint_request.pk]))
+        self.assertNotContains(executor_doc_list, reverse("doc_request_edit", args=[self.doc_request.pk]))
+        self.assertNotContains(executor_maint_list, reverse("maint_request_edit", args=[self.maint_request.pk]))
 
     def test_executor_does_not_see_create_shortcuts(self):
         self.client.force_login(self.executor)
@@ -372,6 +415,105 @@ class RequestCreationPermissionTests(TestCase):
         self.assertEqual(maint_forbidden_response.status_code, 403)
         self.assertContains(doc_response, "PIC Executor")
         self.assertContains(maint_response, "IT Support")
+
+    def test_requester_can_update_own_doc_and_maintenance_requests(self):
+        self.client.force_login(self.requester)
+
+        doc_response = self.client.post(
+            reverse("doc_request_edit", args=[self.doc_request.pk]),
+            data={
+                "brand_materi": str(self.brand_other.id),
+                "lokasi": [str(self.lokasi_other.id)],
+                "jenis_led": str(self.led_type.id),
+                "tanggal": date.today().isoformat(),
+                "requirements": [str(self.requirement.id)],
+                "view_photo": [str(self.view_photo.id)],
+                "jenis_kamera": [str(self.camera_type.id)],
+                "note": "Catatan requester update",
+                "pic_pemohon": "PIC Updated",
+            },
+        )
+        maint_response = self.client.post(
+            reverse("maint_request_edit", args=[self.maint_request.pk]),
+            data={
+                "nama_pemohon": "Pemohon Updated",
+                "departement": "IT Updated",
+                "tanggal_permintaan": date.today().isoformat(),
+                "tanggal_deadline": (date.today() + timedelta(days=3)).isoformat(),
+                "brand_materi": str(self.brand_other.id),
+                "lokasi": [str(self.lokasi_other.id)],
+                "jenis_led": [str(self.maint_led_type_other.id)],
+                "deskripsi_pekerjaan": "Maintenance updated requester",
+            },
+        )
+
+        self.doc_request.refresh_from_db()
+        self.maint_request.refresh_from_db()
+        doc_history_fields = set(
+            EditHistory.objects.filter(
+                request_type=EditHistory.RequestType.DOC_REQUEST,
+                doc_request_id=self.doc_request.pk,
+                action="UPDATE",
+            ).values_list("field_name", flat=True)
+        )
+
+        self.assertRedirects(doc_response, reverse("doc_request_detail", args=[self.doc_request.pk]))
+        self.assertRedirects(maint_response, reverse("maint_request_detail", args=[self.maint_request.pk]))
+        self.assertEqual(self.doc_request.brand_materi, self.brand_other)
+        self.assertEqual(self.doc_request.lokasi_display(), self.lokasi_other.name)
+        self.assertEqual(self.doc_request.note, "Catatan requester update")
+        self.assertEqual(self.doc_request.pic_pemohon, "PIC Updated")
+        self.assertTrue({"Brand / Materi", "Lokasi", "PIC Pemohon", "Note"}.issubset(doc_history_fields))
+        self.assertEqual(self.maint_request.nama_pemohon, "Pemohon Updated")
+        self.assertEqual(self.maint_request.departement, "IT Updated")
+        self.assertEqual(self.maint_request.brand_materi, self.brand_other)
+        self.assertEqual(self.maint_request.lokasi_display(), self.lokasi_other.name)
+        self.assertQuerySetEqual(
+            self.maint_request.jenis_led.order_by("name").values_list("name", flat=True),
+            ["Panel Hidden Executor"],
+            transform=lambda value: value,
+        )
+
+    def test_staff_can_update_doc_and_maintenance_requests(self):
+        self.client.force_login(self.staff)
+
+        doc_response = self.client.post(
+            reverse("doc_request_edit", args=[self.doc_request.pk]),
+            data={
+                "brand_materi": str(self.brand.id),
+                "lokasi": [str(self.lokasi.id)],
+                "jenis_led": str(self.led_type.id),
+                "tanggal": date.today().isoformat(),
+                "requirements": [str(self.requirement.id)],
+                "view_photo": [str(self.view_photo.id)],
+                "jenis_kamera": [str(self.camera_type.id)],
+                "note": "Catatan staff update",
+                "pic_pemohon": "PIC Staff",
+            },
+        )
+        maint_response = self.client.post(
+            reverse("maint_request_edit", args=[self.maint_request.pk]),
+            data={
+                "nama_pemohon": "Pemohon Staff",
+                "departement": "Departement Staff",
+                "tanggal_permintaan": date.today().isoformat(),
+                "tanggal_deadline": (date.today() + timedelta(days=4)).isoformat(),
+                "brand_materi": str(self.brand.id),
+                "lokasi": [str(self.lokasi.id)],
+                "jenis_led": [str(self.maint_led_type.id)],
+                "deskripsi_pekerjaan": "Maintenance updated staff",
+            },
+        )
+
+        self.doc_request.refresh_from_db()
+        self.maint_request.refresh_from_db()
+
+        self.assertRedirects(doc_response, reverse("doc_request_detail", args=[self.doc_request.pk]))
+        self.assertRedirects(maint_response, reverse("maint_request_detail", args=[self.maint_request.pk]))
+        self.assertEqual(self.doc_request.note, "Catatan staff update")
+        self.assertEqual(self.doc_request.pic_pemohon, "PIC Staff")
+        self.assertEqual(self.maint_request.nama_pemohon, "Pemohon Staff")
+        self.assertEqual(self.maint_request.departement, "Departement Staff")
 
     def test_staff_can_edit_pelaksana_in_doc_maintenance_and_jadwal(self):
         self.client.force_login(self.staff)

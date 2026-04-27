@@ -115,6 +115,11 @@
                     </td>
                     {% endif %}
                     <td class="text-center text-nowrap">
+                        {% if can_edit_requests %}
+                        <a href="{% url 'maint_request_edit' req.id %}" class="btn btn-sm btn-warning me-1" title="Edit Request">
+                            <i class="bi bi-pencil-fill"></i>
+                        </a>
+                        {% endif %}
                         <a href="{% url 'maint_request_detail' req.id %}" class="btn btn-sm btn-info me-1" title="View Detail">
                             <i class="bi bi-eye-fill"></i>
                         </a>

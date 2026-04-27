@@ -72,6 +72,11 @@ def _can_view_all_service_requests(user):
     return _is_admin(user) or _is_staff_role(user)
 
 
+def _can_access_request_edit(user):
+    """Admins, staff, and requesters can access edit pages."""
+    return _is_admin(user) or _is_staff_role(user) or _is_requester(user)
+
+
 def _can_manage_service_pelaksana(user):
     """Admins and staff can assign pelaksana/dokumentator."""
     return _is_admin(user) or _is_staff_role(user)
@@ -363,6 +368,15 @@ def _filter_maint_requests_for_user(queryset, user):
     return queryset.filter(submitted_by=user)
 
 
+def _can_edit_request_record(user, submitted_by):
+    if not _can_access_request_edit(user):
+        return False
+    if _is_admin(user) or _is_staff_role(user):
+        return True
+    submitted_by_id = submitted_by.pk if hasattr(submitted_by, "pk") else submitted_by
+    return submitted_by_id == user.id
+
+
 def _format_datetime_for_history(value):
     if not value:
         return "-"
@@ -373,6 +387,20 @@ def _format_file_for_history(field_file):
     if not field_file or not getattr(field_file, "name", ""):
         return "-"
     return os.path.basename(field_file.name)
+
+
+def _doc_request_edit_snapshot(doc_request):
+    return {
+        "Brand / Materi": doc_request.brand_materi.name if doc_request.brand_materi else "-",
+        "Lokasi": doc_request.lokasi_display(),
+        "Jenis Produk": doc_request.jenis_led.name if doc_request.jenis_led else "-",
+        "Tanggal": doc_request.tanggal.strftime("%d/%m/%Y") if doc_request.tanggal else "-",
+        "Requirements": _joined_names(doc_request.requirements, empty_label="-"),
+        "View Photo": _joined_names(doc_request.view_photo, empty_label="-"),
+        "Jenis Kamera": _joined_names(doc_request.jenis_kamera, empty_label="-"),
+        "PIC Pemohon": doc_request.pic_pemohon or "-",
+        "Note": doc_request.note or "-",
+    }
 
 
 def _jadwal_tayang_edit_snapshot(jadwal_tayang):
@@ -439,6 +467,17 @@ def staff_or_admin_required(view_func):
     def wrapper(request, *args, **kwargs):
         if not (_is_admin(request.user) or _is_staff_role(request.user)):
             return _forbidden_response(request, "Halaman ini hanya bisa diakses oleh Staff atau Admin.")
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
+def requester_staff_or_admin_required(view_func):
+    """Decorator that restricts access to requester, staff, or admin."""
+    @wraps(view_func)
+    @login_required
+    def wrapper(request, *args, **kwargs):
+        if not _can_access_request_edit(request.user):
+            return _forbidden_response(request, "Halaman ini hanya bisa diakses oleh Requester, Staff, atau Admin.")
         return view_func(request, *args, **kwargs)
     return wrapper
 
@@ -551,6 +590,7 @@ def doc_request_list(request):
         "requests": requests,
         "all_dokumentators": _assignable_dokumentators_queryset(),
         "can_create_requests": _is_requester(request.user) or _is_admin(request.user),
+        "can_edit_requests": _can_access_request_edit(request.user),
         "is_admin": _is_admin(request.user),
         "is_staff_role": _is_staff_role(request.user),
         "is_executor": _is_executor(request.user),
@@ -593,6 +633,54 @@ def doc_request_create(request):
                 )
         return redirect("doc_request_list")
     return render(request, "products/request_form.html", {"form": form, "title": "Create Documentation Request"})
+
+
+@requester_staff_or_admin_required
+def doc_request_edit(request, pk):
+    doc_request = get_object_or_404(
+        DocumentationRequest.objects.select_related(
+            "submitted_by", "brand_materi", "jenis_led"
+        ).prefetch_related(
+            "lokasi",
+            "requirements",
+            "view_photo",
+            "jenis_kamera",
+        ),
+        pk=pk,
+    )
+    if not _can_edit_request_record(request.user, doc_request.submitted_by):
+        return _forbidden_response(request, "Anda tidak memiliki izin untuk mengedit request ini.")
+
+    form = DocumentationRequestForm(request.POST or None, instance=doc_request)
+    old_values = _doc_request_edit_snapshot(doc_request) if request.method == "POST" else None
+
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            doc_request = form.save()
+            doc_request.refresh_from_db()
+            new_values = _doc_request_edit_snapshot(doc_request)
+            label = _doc_request_label(doc_request)
+            for field_name, old_value in old_values.items():
+                new_value = new_values[field_name]
+                if old_value != new_value:
+                    _create_edit_history(
+                        user=request.user,
+                        action="UPDATE",
+                        request_type=EditHistory.RequestType.DOC_REQUEST,
+                        object_id=doc_request.id,
+                        label=label,
+                        field_name=field_name,
+                        old_value=old_value,
+                        new_value=new_value,
+                    )
+        return redirect("doc_request_detail", pk=doc_request.pk)
+
+    return render(request, "products/request_form.html", {
+        "form": form,
+        "title": "Edit Documentation Request",
+        "is_edit": True,
+        "doc_request": doc_request,
+    })
 
 
 @login_required
@@ -655,6 +743,7 @@ def doc_request_detail(request, pk):
         "request": doc_request,
         "proof_form": proof_form,
         "can_upload_proof": can_upload_proof,
+        "can_edit_request": _can_edit_request_record(request.user, doc_request.submitted_by),
         "is_admin": _is_admin(request.user),
     })
 
@@ -1174,6 +1263,7 @@ def maint_request_list(request):
         "requests": requests_qs,
         "all_dokumentators": _assignable_dokumentators_queryset(),
         "can_create_requests": _is_requester(request.user) or _is_admin(request.user),
+        "can_edit_requests": _can_access_request_edit(request.user),
         "is_admin": _is_admin(request.user),
         "is_staff_role": _is_staff_role(request.user),
         "is_executor": _is_executor(request.user),
@@ -1196,6 +1286,30 @@ def maint_request_create(request):
     return render(request, "products/maint_request_form.html", {
         "form": form,
         "title": "Request Maintenance & Troubleshoot LED",
+    })
+
+
+@requester_staff_or_admin_required
+def maint_request_edit(request, pk):
+    maint_request = get_object_or_404(
+        MaintenanceRequest.objects.select_related(
+            "submitted_by", "brand_materi"
+        ).prefetch_related("lokasi", "jenis_led", "pelaksana"),
+        pk=pk,
+    )
+    if not _can_edit_request_record(request.user, maint_request.submitted_by):
+        return _forbidden_response(request, "Anda tidak memiliki izin untuk mengedit request ini.")
+
+    form = MaintenanceRequestForm(request.POST or None, request.FILES or None, instance=maint_request)
+    if request.method == "POST" and form.is_valid():
+        maint_request = form.save()
+        return redirect("maint_request_detail", pk=maint_request.pk)
+
+    return render(request, "products/maint_request_form.html", {
+        "form": form,
+        "title": "Edit Maintenance & Troubleshoot LED Request",
+        "is_edit": True,
+        "maint_request": maint_request,
     })
 
 
@@ -1228,6 +1342,7 @@ def maint_request_detail(request, pk):
         "req": maint_request,
         "proof_form": proof_form,
         "can_upload_proof": can_upload_proof,
+        "can_edit_request": _can_edit_request_record(request.user, maint_request.submitted_by),
         "is_admin": _is_admin(request.user),
     })
 

@@ -8,9 +8,16 @@
         <h3 class="mb-0">Maintenance Request Detail</h3>
         <p class="text-muted mb-0 small">Viewing maintenance request details</p>
     </div>
-    <a href="{% url 'maint_request_list' %}" class="btn btn-secondary">
-        <i class="bi bi-arrow-left me-1"></i> Back to List
-    </a>
+    <div class="d-flex gap-2">
+        {% if can_edit_request %}
+        <a href="{% url 'maint_request_edit' req.id %}" class="btn btn-warning">
+            <i class="bi bi-pencil-fill me-1"></i> Edit Request
+        </a>
+        {% endif %}
+        <a href="{% url 'maint_request_list' %}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Back to List
+        </a>
+    </div>
 </div>
 
 <div class="row">
