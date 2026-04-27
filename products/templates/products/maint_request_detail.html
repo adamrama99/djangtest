@@ -110,19 +110,47 @@
                             </td>
                         </tr>
                         <tr>
+                            <th class="bg-body-secondary">Foto Bukti Kerja</th>
+                            <td>
+                                {% if req.foto_bukti_kerja %}
+                                <a href="{{ req.foto_bukti_kerja.url }}" target="_blank" class="text-decoration-none">
+                                    <img src="{{ req.foto_bukti_kerja.url }}" alt="Foto Bukti Kerja" class="img-fluid rounded" style="max-height: 320px;">
+                                </a>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
                             <th class="bg-body-secondary">Submitted On</th>
                             <td>{{ req.created_at|date:"d M Y H:i" }}</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
-            {% if user.is_superuser or user.groups.all.0.name == "admin" %}
-            <div class="card-footer text-end">
+            <div class="card-footer">
+                {% if can_upload_proof %}
+                <form method="post" enctype="multipart/form-data" class="mb-3">
+                    {% csrf_token %}
+                    <label for="{{ proof_form.foto_bukti_kerja.id_for_label }}" class="form-label fw-semibold">
+                        Upload Bukti Kerja
+                    </label>
+                    {{ proof_form.foto_bukti_kerja }}
+                    {% if proof_form.foto_bukti_kerja.errors %}
+                    <div class="text-danger small mt-2">{{ proof_form.foto_bukti_kerja.errors|join:", " }}</div>
+                    {% endif %}
+                    <div class="form-text">Hanya satu foto. Upload baru akan menggantikan foto sebelumnya.</div>
+                    <button type="submit" class="btn btn-danger mt-3">
+                        <i class="bi bi-upload me-1"></i>{% if req.foto_bukti_kerja %}Ganti Bukti Kerja{% else %}Upload Bukti Kerja{% endif %}
+                    </button>
+                </form>
+                {% endif %}
+                {% if is_admin %}
                 <a href="{% url 'maint_request_delete' req.id %}" class="btn btn-outline-danger">
                     <i class="bi bi-trash-fill me-1"></i>Delete Request
                 </a>
+                {% endif %}
             </div>
-            {% endif %}
         </div>
     </div>
 </div>

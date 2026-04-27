@@ -15,6 +15,12 @@ from .models import (
 User = get_user_model()
 
 
+def _validate_image_size(foto):
+    if foto and hasattr(foto, "size") and foto.size > 10 * 1024 * 1024:
+        raise forms.ValidationError("Ukuran file maksimal 10 MB.")
+    return foto
+
+
 class DocumentationRequestForm(forms.ModelForm):
     class Meta:
         model = DocumentationRequest
@@ -80,11 +86,43 @@ class MaintenanceRequestForm(forms.ModelForm):
         self.fields['foto_kerusakan'].required = False
 
     def clean_foto_kerusakan(self):
-        foto = self.cleaned_data.get("foto_kerusakan")
-        if foto and hasattr(foto, 'size'):
-            if foto.size > 10 * 1024 * 1024:  # 10 MB
-                raise forms.ValidationError("Ukuran file maksimal 10 MB.")
-        return foto
+        return _validate_image_size(self.cleaned_data.get("foto_kerusakan"))
+
+
+class DocumentationRequestProofForm(forms.ModelForm):
+    class Meta:
+        model = DocumentationRequest
+        fields = ["foto_bukti_kerja"]
+        widgets = {
+            "foto_bukti_kerja": forms.ClearableFileInput(
+                attrs={"class": "form-control", "accept": "image/*"}
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["foto_bukti_kerja"].required = True
+
+    def clean_foto_bukti_kerja(self):
+        return _validate_image_size(self.cleaned_data.get("foto_bukti_kerja"))
+
+
+class MaintenanceRequestProofForm(forms.ModelForm):
+    class Meta:
+        model = MaintenanceRequest
+        fields = ["foto_bukti_kerja"]
+        widgets = {
+            "foto_bukti_kerja": forms.ClearableFileInput(
+                attrs={"class": "form-control", "accept": "image/*"}
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["foto_bukti_kerja"].required = True
+
+    def clean_foto_bukti_kerja(self):
+        return _validate_image_size(self.cleaned_data.get("foto_bukti_kerja"))
 
 
 class MasterDataForm(forms.Form):
@@ -141,10 +179,7 @@ class JadwalTayangForm(forms.ModelForm):
         self.fields["link_foto_drive_requester"].help_text = "Opsional. Isi link share Google Drive atau link referensi foto lainnya."
 
     def clean_foto_referensi_requester(self):
-        foto = self.cleaned_data.get("foto_referensi_requester")
-        if foto and hasattr(foto, "size") and foto.size > 10 * 1024 * 1024:
-            raise forms.ValidationError("Ukuran file maksimal 10 MB.")
-        return foto
+        return _validate_image_size(self.cleaned_data.get("foto_referensi_requester"))
 
 
 class JadwalTayangEditForm(JadwalTayangForm):

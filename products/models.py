@@ -89,6 +89,12 @@ class DocumentationRequest(models.Model):
     jenis_kamera = models.ManyToManyField(cameratype, verbose_name="Jenis Kamera")
     note = models.TextField(blank=True)
     pic_pemohon = models.CharField("PIC Pemohon", max_length=150)
+    foto_bukti_kerja = models.ImageField(
+        "Foto Bukti Kerja",
+        upload_to="doc_request_proofs/",
+        blank=True,
+        null=True,
+    )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='TODO')
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -245,6 +251,12 @@ class MaintenanceRequest(models.Model):
     inventory_items = models.ManyToManyField(InventoryItem, blank=True, verbose_name="Inventory")
     deskripsi_pekerjaan = models.TextField("Deskripsi Pekerjaan")
     foto_kerusakan = models.ImageField("Foto Kerusakan", upload_to="maintenance_photos/", blank=True, null=True)
+    foto_bukti_kerja = models.ImageField(
+        "Foto Bukti Kerja",
+        upload_to="maintenance_proofs/",
+        blank=True,
+        null=True,
+    )
     pelaksana = models.ManyToManyField('Dokumentator', blank=True, verbose_name="Pelaksana Maintenance")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='TODO')
     created_at = models.DateTimeField(auto_now_add=True)

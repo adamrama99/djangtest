@@ -37,6 +37,7 @@
                     <th>Tgl Permintaan</th>
                     <th>Tgl Deadline</th>
                     <th>Status</th>
+                    <th>Bukti Kerja</th>
                     {% if can_manage_pelaksana %}
                     <th>Dokumentator</th>
                     {% endif %}
@@ -83,6 +84,15 @@
                             {% endif %}
                         {% endif %}
                     </td>
+                    <td>
+                        {% if req.foto_bukti_kerja %}
+                        <a href="{{ req.foto_bukti_kerja.url }}" target="_blank" class="text-decoration-none">
+                            <img src="{{ req.foto_bukti_kerja.url }}" alt="Bukti kerja" class="img-thumbnail" style="width:72px;height:72px;object-fit:cover;">
+                        </a>
+                        {% else %}
+                        <span class="text-muted small">Belum upload</span>
+                        {% endif %}
+                    </td>
                     {% if can_manage_pelaksana %}
                     <td>
                         <select class="pelaksana-select" multiple
@@ -107,7 +117,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="{% if can_manage_pelaksana %}10{% else %}9{% endif %}" class="text-center text-muted py-5">
+                    <td colspan="{% if can_manage_pelaksana %}11{% else %}10{% endif %}" class="text-center text-muted py-5">
                         <i class="bi bi-inbox display-6 d-block mb-2"></i>
                         {% if search_active %}
                         Tidak ada maintenance request yang cocok dengan "{{ search_query }}". <a href="{% url 'maint_request_list' %}">Reset pencarian</a>.

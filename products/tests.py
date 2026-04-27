@@ -184,28 +184,53 @@ class DocumentationRequestMultiLokasiTests(TestCase):
 @override_settings(ALLOWED_HOSTS=["testserver", "localhost"])
 class RequestCreationPermissionTests(TestCase):
     @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._media_root = tempfile.mkdtemp()
+        cls._media_override = override_settings(MEDIA_ROOT=cls._media_root)
+        cls._media_override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._media_override.disable()
+        shutil.rmtree(cls._media_root, ignore_errors=True)
+        super().tearDownClass()
+
+    @classmethod
     def setUpTestData(cls):
         cls.requester_group, _ = Group.objects.get_or_create(name="requester")
+        cls.staff_group, _ = Group.objects.get_or_create(name="staff")
         cls.executor_group, _ = Group.objects.get_or_create(name="executor")
         cls.requester = get_user_model().objects.create_user(
             username="requester_only",
             password="password123",
         )
         cls.requester.groups.add(cls.requester_group)
+        cls.staff = get_user_model().objects.create_user(
+            username="staff_only",
+            password="password123",
+        )
+        cls.staff.groups.add(cls.staff_group)
         cls.executor = get_user_model().objects.create_user(
             username="executor_only",
+            first_name="Executor",
+            last_name="Only",
             password="password123",
         )
         cls.executor.groups.add(cls.executor_group)
         cls.brand = BrandMateri.objects.create(name="Brand Executor Access")
+        cls.brand_other = BrandMateri.objects.create(name="Brand Hidden Executor")
         cls.lokasi = Lokasi.objects.create(name="Lokasi Executor Access")
+        cls.lokasi_other = Lokasi.objects.create(name="Lokasi Hidden Executor")
         cls.led_type = LEDType.objects.create(name="LED Executor Access")
         cls.requirement = Requirement.objects.create(name="Requirement Executor Access")
         cls.view_photo = ViewPhoto.objects.create(name="View Executor Access")
         cls.camera_type = cameratype.objects.create(name="Camera Executor Access")
         cls.nama_perangkat = NamaPerangkat.objects.create(name="Panel Executor Access")
-        cls.dokumentator_a = Dokumentator.objects.create(name="Dokumentator Executor A")
-        cls.dokumentator_b = Dokumentator.objects.create(name="Dokumentator Executor B")
+        cls.nama_perangkat_other = NamaPerangkat.objects.create(name="Panel Hidden Executor")
+        cls.executor_dokumentator = Dokumentator.objects.create(name="Executor Only")
+        cls.dokumentator_other = Dokumentator.objects.create(name="Dokumentator Lain")
+        cls.dokumentator_extra = Dokumentator.objects.create(name="Dokumentator Extra")
 
         cls.doc_request = DocumentationRequest.objects.create(
             submitted_by=cls.requester,
@@ -220,6 +245,22 @@ class RequestCreationPermissionTests(TestCase):
         cls.doc_request.view_photo.set([cls.view_photo])
         cls.doc_request.jenis_kamera.set([cls.camera_type])
         cls.doc_assignment = cls.doc_request.lokasi_assignments.get(lokasi=cls.lokasi)
+        cls.doc_assignment.pelaksana.set([cls.executor_dokumentator])
+
+        cls.doc_request_other = DocumentationRequest.objects.create(
+            submitted_by=cls.requester,
+            brand_materi=cls.brand_other,
+            jenis_led=cls.led_type,
+            tanggal=date.today(),
+            note="Catatan tersembunyi",
+            pic_pemohon="PIC Hidden",
+        )
+        cls.doc_request_other.lokasi.set([cls.lokasi_other])
+        cls.doc_request_other.requirements.set([cls.requirement])
+        cls.doc_request_other.view_photo.set([cls.view_photo])
+        cls.doc_request_other.jenis_kamera.set([cls.camera_type])
+        cls.doc_assignment_other = cls.doc_request_other.lokasi_assignments.get(lokasi=cls.lokasi_other)
+        cls.doc_assignment_other.pelaksana.set([cls.dokumentator_other])
 
         cls.maint_request = MaintenanceRequest.objects.create(
             submitted_by=cls.requester,
@@ -230,6 +271,18 @@ class RequestCreationPermissionTests(TestCase):
             deskripsi_pekerjaan="Maintenance untuk akses executor",
         )
         cls.maint_request.nama_perangkat.set([cls.nama_perangkat])
+        cls.maint_request.pelaksana.set([cls.executor_dokumentator])
+
+        cls.maint_request_other = MaintenanceRequest.objects.create(
+            submitted_by=cls.requester,
+            nama_pemohon="Pemohon Hidden",
+            departement="Finance Hidden",
+            tanggal_permintaan=date.today(),
+            tanggal_deadline=date.today() + timedelta(days=2),
+            deskripsi_pekerjaan="Maintenance tersembunyi",
+        )
+        cls.maint_request_other.nama_perangkat.set([cls.nama_perangkat_other])
+        cls.maint_request_other.pelaksana.set([cls.dokumentator_other])
 
         cls.jadwal_tayang = JadwalTayang.objects.create(
             submitted_by=cls.requester,
@@ -241,6 +294,15 @@ class RequestCreationPermissionTests(TestCase):
             pic_pemohon="PIC Jadwal Executor",
         )
         cls.jadwal_tayang.lokasi.set([cls.lokasi])
+
+    def _upload_image(self, name="proof.gif"):
+        tiny_gif = (
+            b"GIF89a\x01\x00\x01\x00\x80\x00\x00"
+            b"\x00\x00\x00\xff\xff\xff!\xf9\x04\x00"
+            b"\x00\x00\x00\x00,\x00\x00\x00\x00\x01"
+            b"\x00\x01\x00\x00\x02\x02D\x01\x00;"
+        )
+        return SimpleUploadedFile(name, tiny_gif, content_type="image/gif")
 
     def test_executor_cannot_open_doc_and_maintenance_create_pages(self):
         self.client.force_login(self.executor)
@@ -273,7 +335,7 @@ class RequestCreationPermissionTests(TestCase):
         self.assertNotContains(doc_list_response, reverse("doc_request_create"))
         self.assertNotContains(maint_list_response, reverse("maint_request_create"))
 
-    def test_executor_can_view_doc_and_maintenance_list_pages(self):
+    def test_executor_only_sees_assigned_doc_and_maintenance_requests(self):
         self.client.force_login(self.executor)
 
         doc_response = self.client.get(reverse("doc_request_list"))
@@ -282,92 +344,139 @@ class RequestCreationPermissionTests(TestCase):
         self.assertEqual(doc_response.status_code, 200)
         self.assertEqual(maint_response.status_code, 200)
         self.assertContains(doc_response, "Brand Executor Access")
+        self.assertNotContains(doc_response, "Brand Hidden Executor")
         self.assertContains(maint_response, "Pemohon Executor")
+        self.assertNotContains(maint_response, "Pemohon Hidden")
 
-    def test_executor_can_view_doc_and_maintenance_detail_pages(self):
+    def test_executor_can_view_only_assigned_detail_pages(self):
         self.client.force_login(self.executor)
 
         doc_response = self.client.get(reverse("doc_request_detail", args=[self.doc_request.pk]))
         maint_response = self.client.get(reverse("maint_request_detail", args=[self.maint_request.pk]))
+        doc_forbidden_response = self.client.get(reverse("doc_request_detail", args=[self.doc_request_other.pk]))
+        maint_forbidden_response = self.client.get(reverse("maint_request_detail", args=[self.maint_request_other.pk]))
 
         self.assertEqual(doc_response.status_code, 200)
         self.assertEqual(maint_response.status_code, 200)
+        self.assertEqual(doc_forbidden_response.status_code, 403)
+        self.assertEqual(maint_forbidden_response.status_code, 403)
         self.assertContains(doc_response, "PIC Executor")
         self.assertContains(maint_response, "IT Support")
 
-    def test_executor_sees_pelaksana_edit_controls_in_all_three_lists(self):
-        self.client.force_login(self.executor)
+    def test_staff_can_edit_pelaksana_in_doc_maintenance_and_jadwal(self):
+        self.client.force_login(self.staff)
 
-        doc_response = self.client.get(reverse("doc_request_list"))
-        maint_response = self.client.get(reverse("maint_request_list"))
-        jadwal_response = self.client.get(reverse("jadwal_tayang_list"))
-
-        self.assertContains(
-            doc_response,
+        doc_response = self.client.post(
             reverse("doc_request_update_lokasi_pelaksana", args=[self.doc_assignment.pk]),
+            {"pelaksana[]": [self.executor_dokumentator.pk, self.dokumentator_extra.pk]},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
         )
-        self.assertContains(
-            maint_response,
+        maint_response = self.client.post(
             reverse("maint_request_update_pelaksana", args=[self.maint_request.pk]),
+            {"pelaksana[]": [self.dokumentator_extra.pk]},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
         )
-        self.assertContains(
-            jadwal_response,
+        jadwal_response = self.client.post(
             reverse("jadwal_tayang_update_pelaksana", args=[self.jadwal_tayang.pk]),
-        )
-
-    def test_executor_can_edit_doc_request_dokumentator(self):
-        self.client.force_login(self.executor)
-
-        response = self.client.post(
-            reverse("doc_request_update_lokasi_pelaksana", args=[self.doc_assignment.pk]),
-            {"pelaksana[]": [self.dokumentator_a.pk, self.dokumentator_b.pk]},
+            {"pelaksana[]": [self.dokumentator_extra.pk]},
             HTTP_X_REQUESTED_WITH="XMLHttpRequest",
         )
 
         self.doc_assignment.refresh_from_db()
+        self.maint_request.refresh_from_db()
+        self.jadwal_tayang.refresh_from_db()
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(doc_response.status_code, 200)
+        self.assertEqual(maint_response.status_code, 200)
+        self.assertEqual(jadwal_response.status_code, 200)
         self.assertQuerySetEqual(
             self.doc_assignment.pelaksana.order_by("name").values_list("name", flat=True),
-            ["Dokumentator Executor A", "Dokumentator Executor B"],
+            ["Dokumentator Extra", "Executor Only"],
+            transform=lambda value: value,
+        )
+        self.assertQuerySetEqual(
+            self.maint_request.pelaksana.order_by("name").values_list("name", flat=True),
+            ["Dokumentator Extra"],
+            transform=lambda value: value,
+        )
+        self.assertQuerySetEqual(
+            self.jadwal_tayang.pelaksana.order_by("name").values_list("name", flat=True),
+            ["Dokumentator Extra"],
             transform=lambda value: value,
         )
 
-    def test_executor_can_edit_maintenance_pelaksana(self):
+    def test_executor_cannot_edit_pelaksana_assignments(self):
+        self.client.force_login(self.executor)
+
+        doc_response = self.client.post(
+            reverse("doc_request_update_lokasi_pelaksana", args=[self.doc_assignment.pk]),
+            {"pelaksana[]": [self.dokumentator_extra.pk]},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        maint_response = self.client.post(
+            reverse("maint_request_update_pelaksana", args=[self.maint_request.pk]),
+            {"pelaksana[]": [self.dokumentator_extra.pk]},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        jadwal_response = self.client.post(
+            reverse("jadwal_tayang_update_pelaksana", args=[self.jadwal_tayang.pk]),
+            {"pelaksana[]": [self.dokumentator_extra.pk]},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(doc_response.status_code, 403)
+        self.assertEqual(maint_response.status_code, 403)
+        self.assertEqual(jadwal_response.status_code, 403)
+
+    def test_executor_can_upload_doc_request_proof_and_status_becomes_done(self):
         self.client.force_login(self.executor)
 
         response = self.client.post(
-            reverse("maint_request_update_pelaksana", args=[self.maint_request.pk]),
-            {"pelaksana[]": [self.dokumentator_b.pk]},
-            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            reverse("doc_request_detail", args=[self.doc_request.pk]),
+            {"foto_bukti_kerja": self._upload_image("doc-proof.gif")},
+        )
+
+        self.doc_request.refresh_from_db()
+
+        self.assertRedirects(response, reverse("doc_request_detail", args=[self.doc_request.pk]))
+        self.assertTrue(bool(self.doc_request.foto_bukti_kerja))
+        self.assertEqual(self.doc_request.status, "DONE")
+
+    def test_executor_can_upload_maintenance_proof_and_status_becomes_done(self):
+        self.client.force_login(self.executor)
+
+        response = self.client.post(
+            reverse("maint_request_detail", args=[self.maint_request.pk]),
+            {"foto_bukti_kerja": self._upload_image("maint-proof.gif")},
         )
 
         self.maint_request.refresh_from_db()
 
-        self.assertEqual(response.status_code, 200)
-        self.assertQuerySetEqual(
-            self.maint_request.pelaksana.order_by("name").values_list("name", flat=True),
-            ["Dokumentator Executor B"],
-            transform=lambda value: value,
+        self.assertRedirects(response, reverse("maint_request_detail", args=[self.maint_request.pk]))
+        self.assertTrue(bool(self.maint_request.foto_bukti_kerja))
+        self.assertEqual(self.maint_request.status, "DONE")
+
+    def test_staff_can_upload_doc_and_maintenance_proof(self):
+        self.client.force_login(self.staff)
+
+        doc_response = self.client.post(
+            reverse("doc_request_detail", args=[self.doc_request_other.pk]),
+            {"foto_bukti_kerja": self._upload_image("doc-proof-staff.gif")},
+        )
+        maint_response = self.client.post(
+            reverse("maint_request_detail", args=[self.maint_request_other.pk]),
+            {"foto_bukti_kerja": self._upload_image("maint-proof-staff.gif")},
         )
 
-    def test_executor_can_edit_jadwal_tayang_pelaksana(self):
-        self.client.force_login(self.executor)
+        self.doc_request_other.refresh_from_db()
+        self.maint_request_other.refresh_from_db()
 
-        response = self.client.post(
-            reverse("jadwal_tayang_update_pelaksana", args=[self.jadwal_tayang.pk]),
-            {"pelaksana[]": [self.dokumentator_a.pk]},
-            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
-        )
-
-        self.jadwal_tayang.refresh_from_db()
-
-        self.assertEqual(response.status_code, 200)
-        self.assertQuerySetEqual(
-            self.jadwal_tayang.pelaksana.order_by("name").values_list("name", flat=True),
-            ["Dokumentator Executor A"],
-            transform=lambda value: value,
-        )
+        self.assertRedirects(doc_response, reverse("doc_request_detail", args=[self.doc_request_other.pk]))
+        self.assertRedirects(maint_response, reverse("maint_request_detail", args=[self.maint_request_other.pk]))
+        self.assertTrue(bool(self.doc_request_other.foto_bukti_kerja))
+        self.assertTrue(bool(self.maint_request_other.foto_bukti_kerja))
+        self.assertEqual(self.doc_request_other.status, "DONE")
+        self.assertEqual(self.maint_request_other.status, "DONE")
 
 
 @override_settings(ALLOWED_HOSTS=["testserver", "localhost"])

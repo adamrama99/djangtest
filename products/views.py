@@ -19,8 +19,10 @@ from .models import (
 )
 from .forms import (
     DocumentationRequestForm,
+    DocumentationRequestProofForm,
     MasterDataForm,
     MaintenanceRequestForm,
+    MaintenanceRequestProofForm,
     JadwalTayangForm,
     JadwalTayangEditForm,
     TakeoutAlertRuleForm,
@@ -55,19 +57,71 @@ def _is_requester(user):
     return user.groups.filter(name="requester").exists()
 
 
+def _is_staff_role(user):
+    """Check if user is in the 'staff' group."""
+    return user.groups.filter(name="staff").exists()
+
+
 def _is_executor(user):
     """Check if user is in the 'executor' group."""
     return user.groups.filter(name="executor").exists()
 
 
 def _can_view_all_service_requests(user):
-    """Executors and admins can monitor all service requests."""
-    return _is_admin(user) or _is_executor(user)
+    """Admins and staff can monitor all service requests."""
+    return _is_admin(user) or _is_staff_role(user)
 
 
 def _can_manage_service_pelaksana(user):
-    """Executors and admins can assign pelaksana/dokumentator."""
-    return _is_admin(user) or _is_executor(user)
+    """Admins and staff can assign pelaksana/dokumentator."""
+    return _is_admin(user) or _is_staff_role(user)
+
+
+def _can_upload_service_proof(user):
+    """Admins, staff, and executors can upload a single proof photo."""
+    return _is_admin(user) or _is_staff_role(user) or _is_executor(user)
+
+
+def _user_dokumentator_candidate_names(user):
+    candidate_names = []
+    full_name = user.get_full_name().strip()
+    if full_name:
+        candidate_names.append(full_name)
+    for value in (user.first_name, user.last_name):
+        cleaned = (value or "").strip()
+        if cleaned:
+            candidate_names.append(cleaned)
+    username = (user.username or "").strip()
+    if username:
+        if "@" in username:
+            local_part = username.split("@", 1)[0].strip()
+            if local_part:
+                candidate_names.append(local_part)
+        candidate_names.append(username)
+
+    seen = set()
+    unique_names = []
+    for name in candidate_names:
+        normalized = name.casefold()
+        if normalized not in seen:
+            seen.add(normalized)
+            unique_names.append(name)
+    return unique_names
+
+
+def _matching_dokumentator_queryset(user):
+    candidate_names = _user_dokumentator_candidate_names(user)
+    if not candidate_names:
+        return Dokumentator.objects.none()
+
+    query = Q(pk__isnull=True)
+    for name in candidate_names:
+        query |= Q(name__iexact=name)
+    return Dokumentator.objects.filter(query)
+
+
+def _matching_dokumentator_ids(user):
+    return list(_matching_dokumentator_queryset(user).values_list("id", flat=True))
 
 
 def _doc_request_label(doc_request):
@@ -225,27 +279,12 @@ def _user_search_filter(search_query):
 
 
 def _get_or_create_dokumentator_for_user(user):
-    candidate_names = []
-    full_name = user.get_full_name().strip()
-    if full_name:
-        candidate_names.append(full_name)
-    if user.username:
-        candidate_names.append(user.username.strip())
+    candidate_names = _user_dokumentator_candidate_names(user)
+    dokumentator = _matching_dokumentator_queryset(user).order_by("name").first()
+    if dokumentator:
+        return dokumentator, False
 
-    seen = set()
-    unique_names = []
-    for name in candidate_names:
-        normalized = name.lower()
-        if name and normalized not in seen:
-            seen.add(normalized)
-            unique_names.append(name)
-
-    for name in unique_names:
-        dokumentator = Dokumentator.objects.filter(name__iexact=name).first()
-        if dokumentator:
-            return dokumentator, False
-
-    primary_name = unique_names[0] if unique_names else ""
+    primary_name = candidate_names[0] if candidate_names else ""
     if not primary_name:
         return None, False
 
@@ -274,6 +313,28 @@ def _create_edit_history(
         old_value=old_value,
         new_value=new_value,
     )
+
+
+def _filter_doc_requests_for_user(queryset, user):
+    if _can_view_all_service_requests(user):
+        return queryset
+    if _is_executor(user):
+        dokumentator_ids = _matching_dokumentator_ids(user)
+        if not dokumentator_ids:
+            return queryset.none()
+        return queryset.filter(lokasi_assignments__pelaksana__in=dokumentator_ids).distinct()
+    return queryset.filter(submitted_by=user)
+
+
+def _filter_maint_requests_for_user(queryset, user):
+    if _can_view_all_service_requests(user):
+        return queryset
+    if _is_executor(user):
+        dokumentator_ids = _matching_dokumentator_ids(user)
+        if not dokumentator_ids:
+            return queryset.none()
+        return queryset.filter(pelaksana__in=dokumentator_ids).distinct()
+    return queryset.filter(submitted_by=user)
 
 
 def _format_datetime_for_history(value):
@@ -345,6 +406,17 @@ def requester_or_admin_required(view_func):
     return wrapper
 
 
+def staff_or_admin_required(view_func):
+    """Decorator that restricts access to staff or admin."""
+    @wraps(view_func)
+    @login_required
+    def wrapper(request, *args, **kwargs):
+        if not (_is_admin(request.user) or _is_staff_role(request.user)):
+            return _forbidden_response(request, "Halaman ini hanya bisa diakses oleh Staff atau Admin.")
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
 def executor_or_admin_required(view_func):
     """Decorator that restricts access to executor or admin."""
     @wraps(view_func)
@@ -360,12 +432,8 @@ def executor_or_admin_required(view_func):
 
 @login_required
 def dashboard(request):
-    if _can_view_all_service_requests(request.user):
-        doc_qs = DocumentationRequest.objects.all()
-        maint_qs = MaintenanceRequest.objects.all()
-    else:
-        doc_qs = DocumentationRequest.objects.filter(submitted_by=request.user)
-        maint_qs = MaintenanceRequest.objects.filter(submitted_by=request.user)
+    doc_qs = _filter_doc_requests_for_user(DocumentationRequest.objects.all(), request.user)
+    maint_qs = _filter_maint_requests_for_user(MaintenanceRequest.objects.all(), request.user)
 
     # Jadwal tayang dapat dilihat oleh semua user yang login.
     jt_qs = JadwalTayang.objects.all()
@@ -425,7 +493,8 @@ def dashboard(request):
 @login_required
 def doc_request_list(request):
     search_query = _get_search_query(request)
-    requests = DocumentationRequest.objects.select_related(
+    requests = _filter_doc_requests_for_user(
+        DocumentationRequest.objects.select_related(
         "brand_materi", "jenis_led", "submitted_by"
     ).prefetch_related(
         "lokasi",
@@ -434,9 +503,9 @@ def doc_request_list(request):
         "jenis_kamera",
         "lokasi_assignments__lokasi",
         "lokasi_assignments__pelaksana",
-    ).order_by("-id")
-    if not _can_view_all_service_requests(request.user):
-        requests = requests.filter(submitted_by=request.user)
+    ).order_by("-id"),
+        request.user,
+    )
     if search_query:
         requests = requests.filter(
             _pk_search_q(search_query)
@@ -457,8 +526,10 @@ def doc_request_list(request):
         "all_dokumentators": Dokumentator.objects.all().order_by("name"),
         "can_create_requests": _is_requester(request.user) or _is_admin(request.user),
         "is_admin": _is_admin(request.user),
+        "is_staff_role": _is_staff_role(request.user),
         "is_executor": _is_executor(request.user),
         "can_manage_pelaksana": _can_manage_service_pelaksana(request.user),
+        "can_upload_proof": _can_upload_service_proof(request.user),
         **_search_context(request, "Cari brand, lokasi, PIC, requirement, kamera, atau user"),
     })
 
@@ -513,9 +584,53 @@ def doc_request_detail(request, pk):
         ),
         pk=pk,
     )
-    if not _can_view_all_service_requests(request.user) and doc_request.submitted_by != request.user:
+    if not _filter_doc_requests_for_user(DocumentationRequest.objects.filter(pk=pk), request.user).exists():
         return _forbidden_response(request, "Anda tidak memiliki izin untuk melihat detail request ini.")
-    return render(request, "products/request_detail.html", {"request": doc_request})
+
+    proof_form = DocumentationRequestProofForm(instance=doc_request)
+    can_upload_proof = _can_upload_service_proof(request.user)
+
+    if request.method == "POST":
+        if not can_upload_proof:
+            return _forbidden_response(request, "Anda tidak memiliki izin untuk upload bukti kerja.")
+        proof_form = DocumentationRequestProofForm(request.POST, request.FILES, instance=doc_request)
+        if proof_form.is_valid():
+            old_status = doc_request.get_status_display()
+            old_file = _format_file_for_history(doc_request.foto_bukti_kerja)
+            doc_request = proof_form.save(commit=False)
+            doc_request.status = "DONE"
+            doc_request.save()
+            new_file = _format_file_for_history(doc_request.foto_bukti_kerja)
+            if old_file != new_file:
+                _create_edit_history(
+                    user=request.user,
+                    action="UPDATE",
+                    request_type=EditHistory.RequestType.DOC_REQUEST,
+                    object_id=doc_request.id,
+                    label=_doc_request_label(doc_request),
+                    field_name="Foto Bukti Kerja",
+                    old_value=old_file,
+                    new_value=new_file,
+                )
+            if old_status != doc_request.get_status_display():
+                _create_edit_history(
+                    user=request.user,
+                    action="UPDATE",
+                    request_type=EditHistory.RequestType.DOC_REQUEST,
+                    object_id=doc_request.id,
+                    label=_doc_request_label(doc_request),
+                    field_name="Status",
+                    old_value=old_status,
+                    new_value=doc_request.get_status_display(),
+                )
+            return redirect("doc_request_detail", pk=doc_request.pk)
+
+    return render(request, "products/request_detail.html", {
+        "request": doc_request,
+        "proof_form": proof_form,
+        "can_upload_proof": can_upload_proof,
+        "is_admin": _is_admin(request.user),
+    })
 
 
 @admin_required
@@ -564,7 +679,7 @@ def doc_request_update_status(request, pk):
     return HttpResponseForbidden("POST only.")
 
 
-@executor_or_admin_required
+@staff_or_admin_required
 def doc_request_update_lokasi_pelaksana(request, assignment_pk):
     """AJAX-only endpoint to update pelaksana for a request lokasi assignment."""
     if request.method == "POST":
@@ -1008,11 +1123,13 @@ def master_data_import_confirm(request, slug):
 @login_required
 def maint_request_list(request):
     search_query = _get_search_query(request)
-    requests_qs = MaintenanceRequest.objects.select_related(
+    requests_qs = _filter_maint_requests_for_user(
+        MaintenanceRequest.objects.select_related(
         "submitted_by"
     ).prefetch_related("nama_perangkat", "inventory_items", "pelaksana").order_by("-id")
-    if not _can_view_all_service_requests(request.user):
-        requests_qs = requests_qs.filter(submitted_by=request.user)
+        ,
+        request.user,
+    )
     if search_query:
         requests_qs = requests_qs.filter(
             _pk_search_q(search_query)
@@ -1032,8 +1149,10 @@ def maint_request_list(request):
         "all_dokumentators": Dokumentator.objects.all().order_by("name"),
         "can_create_requests": _is_requester(request.user) or _is_admin(request.user),
         "is_admin": _is_admin(request.user),
+        "is_staff_role": _is_staff_role(request.user),
         "is_executor": _is_executor(request.user),
         "can_manage_pelaksana": _can_manage_service_pelaksana(request.user),
+        "can_upload_proof": _can_upload_service_proof(request.user),
         **_search_context(request, "Cari pemohon, departement, perangkat, inventory, atau dokumentator"),
     })
 
@@ -1073,7 +1192,7 @@ def maint_request_detail(request, pk):
         ),
         pk=pk,
     )
-    if not _can_view_all_service_requests(request.user) and maint_request.submitted_by != request.user:
+    if not _filter_maint_requests_for_user(MaintenanceRequest.objects.filter(pk=pk), request.user).exists():
         return _forbidden_response(request, "Anda tidak memiliki izin untuk melihat detail request ini.")
 
     # Group the selected inventory items
@@ -1083,10 +1202,25 @@ def maint_request_detail(request, pk):
         if group_label not in inventory_grouped:
             inventory_grouped[group_label] = []
         inventory_grouped[group_label].append(item.name)
+    proof_form = MaintenanceRequestProofForm(instance=maint_request)
+    can_upload_proof = _can_upload_service_proof(request.user)
+
+    if request.method == "POST":
+        if not can_upload_proof:
+            return _forbidden_response(request, "Anda tidak memiliki izin untuk upload bukti kerja.")
+        proof_form = MaintenanceRequestProofForm(request.POST, request.FILES, instance=maint_request)
+        if proof_form.is_valid():
+            maint_request = proof_form.save(commit=False)
+            maint_request.status = "DONE"
+            maint_request.save()
+            return redirect("maint_request_detail", pk=maint_request.pk)
 
     return render(request, "products/maint_request_detail.html", {
         "req": maint_request,
         "inventory_grouped": inventory_grouped,
+        "proof_form": proof_form,
+        "can_upload_proof": can_upload_proof,
+        "is_admin": _is_admin(request.user),
     })
 
 
@@ -1113,7 +1247,7 @@ def maint_request_update_status(request, pk):
     return HttpResponseForbidden("POST only.")
 
 
-@executor_or_admin_required
+@staff_or_admin_required
 def maint_request_update_pelaksana(request, pk):
     """AJAX-only endpoint to update pelaksana for a maintenance request."""
     if request.method == "POST":
@@ -1364,7 +1498,7 @@ def jadwal_tayang_update_status(request, pk):
     return HttpResponseForbidden("POST only.")
 
 
-@executor_or_admin_required
+@staff_or_admin_required
 def jadwal_tayang_update_pelaksana(request, pk):
     if request.method == "POST":
         jt = get_object_or_404(
