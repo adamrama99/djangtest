@@ -109,6 +109,11 @@ def _user_dokumentator_candidate_names(user):
     return unique_names
 
 
+def _user_dokumentator_display_name(user):
+    candidate_names = _user_dokumentator_candidate_names(user)
+    return candidate_names[0] if candidate_names else ""
+
+
 def _matching_dokumentator_queryset(user):
     candidate_names = _user_dokumentator_candidate_names(user)
     if not candidate_names:
@@ -122,6 +127,27 @@ def _matching_dokumentator_queryset(user):
 
 def _matching_dokumentator_ids(user):
     return list(_matching_dokumentator_queryset(user).values_list("id", flat=True))
+
+
+def _assignable_dokumentators_queryset():
+    """
+    Keep Dokumentator choices in sync with executor users so select2 options
+    reflect the current executor roster.
+    """
+    executor_users = (
+        User.objects.filter(groups__name="executor")
+        .order_by("first_name", "last_name", "username")
+        .distinct()
+    )
+
+    for executor_user in executor_users:
+        display_name = _user_dokumentator_display_name(executor_user)
+        if not display_name:
+            continue
+        if not _matching_dokumentator_queryset(executor_user).exists():
+            Dokumentator.objects.get_or_create(name=display_name)
+
+    return Dokumentator.objects.all().order_by("name")
 
 
 def _doc_request_label(doc_request):
@@ -523,7 +549,7 @@ def doc_request_list(request):
         ).distinct()
     return render(request, "products/request_list.html", {
         "requests": requests,
-        "all_dokumentators": Dokumentator.objects.all().order_by("name"),
+        "all_dokumentators": _assignable_dokumentators_queryset(),
         "can_create_requests": _is_requester(request.user) or _is_admin(request.user),
         "is_admin": _is_admin(request.user),
         "is_staff_role": _is_staff_role(request.user),
@@ -1146,7 +1172,7 @@ def maint_request_list(request):
         ).distinct()
     return render(request, "products/maint_request_list.html", {
         "requests": requests_qs,
-        "all_dokumentators": Dokumentator.objects.all().order_by("name"),
+        "all_dokumentators": _assignable_dokumentators_queryset(),
         "can_create_requests": _is_requester(request.user) or _is_admin(request.user),
         "is_admin": _is_admin(request.user),
         "is_staff_role": _is_staff_role(request.user),
@@ -1295,7 +1321,7 @@ def jadwal_tayang_list(request):
         req.photo_status_info = _jadwal_tayang_photo_status_info(req, now)
     return render(request, "products/jadwal_tayang_list.html", {
         "requests": requests,
-        "all_dokumentators": Dokumentator.objects.all().order_by("name"),
+        "all_dokumentators": _assignable_dokumentators_queryset(),
         "is_requester": _is_requester(request.user),
         "is_executor": _is_executor(request.user),
         "is_admin": _is_admin(request.user),

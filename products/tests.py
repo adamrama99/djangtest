@@ -478,6 +478,24 @@ class RequestCreationPermissionTests(TestCase):
         self.assertEqual(self.doc_request_other.status, "DONE")
         self.assertEqual(self.maint_request_other.status, "DONE")
 
+    def test_executor_users_are_synced_into_dokumentator_dropdown(self):
+        extra_executor = get_user_model().objects.create_user(
+            username="new.exec",
+            first_name="Budi",
+            last_name="Executor",
+            password="password123",
+        )
+        extra_executor.groups.add(self.executor_group)
+
+        Dokumentator.objects.filter(name="Budi Executor").delete()
+
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse("doc_request_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Budi Executor")
+        self.assertTrue(Dokumentator.objects.filter(name="Budi Executor").exists())
+
 
 @override_settings(ALLOWED_HOSTS=["testserver", "localhost"])
 class JadwalTayangHistoryTests(TestCase):

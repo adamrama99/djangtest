@@ -17,5 +17,7 @@ pkill -f gunicorn
 /var/www/djangtest/venv/bin/python -m pip install -r requirements.txt
 /var/www/djangtest/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:8002 mysite.wsgi:application
 
-jalankan venv
+jalankan venv:
 .\.venv\Scripts\Activate.ps1
+untuk server:
+source venv/bin/activate
