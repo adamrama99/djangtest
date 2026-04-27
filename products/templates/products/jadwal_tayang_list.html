@@ -43,7 +43,7 @@
                     <th>Tgl Takeout</th>
                     <th>PIC</th>
                     <th>Status Foto</th>
-                    {% if is_admin %}
+                    {% if can_manage_pelaksana %}
                     <th>Pelaksana</th>
                     {% endif %}
                     <th style="width:180px" class="text-center">Actions</th>
@@ -71,7 +71,7 @@
                         <span class="badge text-bg-{{ req.photo_status_info.badge_class }}">{{ req.photo_status_info.label }}</span>
                         <div class="text-muted small mt-1">{{ req.photo_status_info.detail }}</div>
                     </td>
-                    {% if is_admin %}
+                    {% if can_manage_pelaksana %}
                     <td>
                         <select class="pelaksana-select" multiple
                                 data-url="{% url 'jadwal_tayang_update_pelaksana' req.id %}"
@@ -100,7 +100,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="{% if is_admin %}11{% else %}10{% endif %}" class="text-center text-muted py-5">
+                    <td colspan="{% if can_manage_pelaksana %}11{% else %}10{% endif %}" class="text-center text-muted py-5">
                         <i class="bi bi-inbox display-6 d-block mb-2"></i>
                         {% if search_active %}
                         Tidak ada jadwal tayang yang cocok dengan "{{ search_query }}". <a href="{% url 'jadwal_tayang_list' %}">Reset pencarian</a>.
@@ -162,7 +162,7 @@
   });
 </script>
 
-{% if is_admin %}
+{% if can_manage_pelaksana %}
 <form style="display:none">{% csrf_token %}</form>
 {% endif %}
 

@@ -197,6 +197,50 @@ class RequestCreationPermissionTests(TestCase):
             password="password123",
         )
         cls.executor.groups.add(cls.executor_group)
+        cls.brand = BrandMateri.objects.create(name="Brand Executor Access")
+        cls.lokasi = Lokasi.objects.create(name="Lokasi Executor Access")
+        cls.led_type = LEDType.objects.create(name="LED Executor Access")
+        cls.requirement = Requirement.objects.create(name="Requirement Executor Access")
+        cls.view_photo = ViewPhoto.objects.create(name="View Executor Access")
+        cls.camera_type = cameratype.objects.create(name="Camera Executor Access")
+        cls.nama_perangkat = NamaPerangkat.objects.create(name="Panel Executor Access")
+        cls.dokumentator_a = Dokumentator.objects.create(name="Dokumentator Executor A")
+        cls.dokumentator_b = Dokumentator.objects.create(name="Dokumentator Executor B")
+
+        cls.doc_request = DocumentationRequest.objects.create(
+            submitted_by=cls.requester,
+            brand_materi=cls.brand,
+            jenis_led=cls.led_type,
+            tanggal=date.today(),
+            note="Catatan untuk executor",
+            pic_pemohon="PIC Executor",
+        )
+        cls.doc_request.lokasi.set([cls.lokasi])
+        cls.doc_request.requirements.set([cls.requirement])
+        cls.doc_request.view_photo.set([cls.view_photo])
+        cls.doc_request.jenis_kamera.set([cls.camera_type])
+        cls.doc_assignment = cls.doc_request.lokasi_assignments.get(lokasi=cls.lokasi)
+
+        cls.maint_request = MaintenanceRequest.objects.create(
+            submitted_by=cls.requester,
+            nama_pemohon="Pemohon Executor",
+            departement="IT Support",
+            tanggal_permintaan=date.today(),
+            tanggal_deadline=date.today() + timedelta(days=1),
+            deskripsi_pekerjaan="Maintenance untuk akses executor",
+        )
+        cls.maint_request.nama_perangkat.set([cls.nama_perangkat])
+
+        cls.jadwal_tayang = JadwalTayang.objects.create(
+            submitted_by=cls.requester,
+            brand_materi=cls.brand,
+            jenis_led=cls.led_type,
+            tanggal_tayang=timezone.now(),
+            tanggal_takeout=timezone.now() + timedelta(hours=4),
+            note_requester="Jadwal untuk executor",
+            pic_pemohon="PIC Jadwal Executor",
+        )
+        cls.jadwal_tayang.lokasi.set([cls.lokasi])
 
     def test_executor_cannot_open_doc_and_maintenance_create_pages(self):
         self.client.force_login(self.executor)
@@ -228,6 +272,102 @@ class RequestCreationPermissionTests(TestCase):
         self.assertNotContains(dashboard_response, reverse("jadwal_tayang_create"))
         self.assertNotContains(doc_list_response, reverse("doc_request_create"))
         self.assertNotContains(maint_list_response, reverse("maint_request_create"))
+
+    def test_executor_can_view_doc_and_maintenance_list_pages(self):
+        self.client.force_login(self.executor)
+
+        doc_response = self.client.get(reverse("doc_request_list"))
+        maint_response = self.client.get(reverse("maint_request_list"))
+
+        self.assertEqual(doc_response.status_code, 200)
+        self.assertEqual(maint_response.status_code, 200)
+        self.assertContains(doc_response, "Brand Executor Access")
+        self.assertContains(maint_response, "Pemohon Executor")
+
+    def test_executor_can_view_doc_and_maintenance_detail_pages(self):
+        self.client.force_login(self.executor)
+
+        doc_response = self.client.get(reverse("doc_request_detail", args=[self.doc_request.pk]))
+        maint_response = self.client.get(reverse("maint_request_detail", args=[self.maint_request.pk]))
+
+        self.assertEqual(doc_response.status_code, 200)
+        self.assertEqual(maint_response.status_code, 200)
+        self.assertContains(doc_response, "PIC Executor")
+        self.assertContains(maint_response, "IT Support")
+
+    def test_executor_sees_pelaksana_edit_controls_in_all_three_lists(self):
+        self.client.force_login(self.executor)
+
+        doc_response = self.client.get(reverse("doc_request_list"))
+        maint_response = self.client.get(reverse("maint_request_list"))
+        jadwal_response = self.client.get(reverse("jadwal_tayang_list"))
+
+        self.assertContains(
+            doc_response,
+            reverse("doc_request_update_lokasi_pelaksana", args=[self.doc_assignment.pk]),
+        )
+        self.assertContains(
+            maint_response,
+            reverse("maint_request_update_pelaksana", args=[self.maint_request.pk]),
+        )
+        self.assertContains(
+            jadwal_response,
+            reverse("jadwal_tayang_update_pelaksana", args=[self.jadwal_tayang.pk]),
+        )
+
+    def test_executor_can_edit_doc_request_dokumentator(self):
+        self.client.force_login(self.executor)
+
+        response = self.client.post(
+            reverse("doc_request_update_lokasi_pelaksana", args=[self.doc_assignment.pk]),
+            {"pelaksana[]": [self.dokumentator_a.pk, self.dokumentator_b.pk]},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.doc_assignment.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertQuerySetEqual(
+            self.doc_assignment.pelaksana.order_by("name").values_list("name", flat=True),
+            ["Dokumentator Executor A", "Dokumentator Executor B"],
+            transform=lambda value: value,
+        )
+
+    def test_executor_can_edit_maintenance_pelaksana(self):
+        self.client.force_login(self.executor)
+
+        response = self.client.post(
+            reverse("maint_request_update_pelaksana", args=[self.maint_request.pk]),
+            {"pelaksana[]": [self.dokumentator_b.pk]},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.maint_request.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertQuerySetEqual(
+            self.maint_request.pelaksana.order_by("name").values_list("name", flat=True),
+            ["Dokumentator Executor B"],
+            transform=lambda value: value,
+        )
+
+    def test_executor_can_edit_jadwal_tayang_pelaksana(self):
+        self.client.force_login(self.executor)
+
+        response = self.client.post(
+            reverse("jadwal_tayang_update_pelaksana", args=[self.jadwal_tayang.pk]),
+            {"pelaksana[]": [self.dokumentator_a.pk]},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.jadwal_tayang.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertQuerySetEqual(
+            self.jadwal_tayang.pelaksana.order_by("name").values_list("name", flat=True),
+            ["Dokumentator Executor A"],
+            transform=lambda value: value,
+        )
 
 
 @override_settings(ALLOWED_HOSTS=["testserver", "localhost"])

@@ -39,7 +39,7 @@
                     <th>Tanggal</th>
                     <th>PIC</th>
                     <th>Status</th>
-                    {% if user.is_superuser or user.groups.all.0.name == "admin" %}
+                    {% if can_manage_pelaksana %}
                     <th>Dokumentator per Lokasi</th>
                     {% endif %}
                     <th style="width:140px" class="text-center">Actions</th>
@@ -75,7 +75,7 @@
                     </td>
                     <td>{{ req.pic_pemohon }}</td>
                     <td>
-                        {% if user.is_superuser or user.groups.all.0.name == "admin" %}
+                        {% if is_admin %}
                         <select class="form-select form-select-sm status-select"
                                 data-url="{% url 'doc_request_update_status' req.id %}"
                                 style="min-width:130px;">
@@ -93,7 +93,7 @@
                             {% endif %}
                         {% endif %}
                     </td>
-                    {% if user.is_superuser or user.groups.all.0.name == "admin" %}
+                    {% if can_manage_pelaksana %}
                     <td style="min-width:260px;">
                         <div class="d-flex flex-column gap-2">
                             {% for assignment in req.lokasi_assignments.all %}
@@ -114,7 +114,7 @@
                         <a href="{% url 'doc_request_detail' req.id %}" class="btn btn-sm btn-info me-1" title="View Detail">
                             <i class="bi bi-eye-fill"></i>
                         </a>
-                        {% if user.is_superuser or user.groups.all.0.name == "admin" %}
+                        {% if is_admin %}
                         <a href="{% url 'doc_request_delete' req.id %}" class="btn btn-sm btn-danger" title="Delete">
                             <i class="bi bi-trash-fill"></i>
                         </a>
@@ -123,7 +123,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="{% if user.is_superuser or user.groups.all.0.name == 'admin' %}12{% else %}11{% endif %}" class="text-center text-muted py-5">
+                    <td colspan="{% if can_manage_pelaksana %}12{% else %}11{% endif %}" class="text-center text-muted py-5">
                         <i class="bi bi-inbox display-6 d-block mb-2"></i>
                         {% if search_active %}
                         Tidak ada request yang cocok dengan "{{ search_query }}". <a href="{% url 'doc_request_list' %}">Reset pencarian</a>.
@@ -210,7 +210,7 @@
   });
 </script>
 
-{% if user.is_superuser or user.groups.all.0.name == "admin" %}
+{% if can_manage_pelaksana %}
 <form style="display:none">{% csrf_token %}</form>
 {% endif %}
 

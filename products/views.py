@@ -60,6 +60,16 @@ def _is_executor(user):
     return user.groups.filter(name="executor").exists()
 
 
+def _can_view_all_service_requests(user):
+    """Executors and admins can monitor all service requests."""
+    return _is_admin(user) or _is_executor(user)
+
+
+def _can_manage_service_pelaksana(user):
+    """Executors and admins can assign pelaksana/dokumentator."""
+    return _is_admin(user) or _is_executor(user)
+
+
 def _doc_request_label(doc_request):
     brand = doc_request.brand_materi.name if doc_request.brand_materi else "N/A"
     label = f"{brand} - {doc_request.tanggal}"
@@ -350,7 +360,7 @@ def executor_or_admin_required(view_func):
 
 @login_required
 def dashboard(request):
-    if _is_admin(request.user):
+    if _can_view_all_service_requests(request.user):
         doc_qs = DocumentationRequest.objects.all()
         maint_qs = MaintenanceRequest.objects.all()
     else:
@@ -415,30 +425,18 @@ def dashboard(request):
 @login_required
 def doc_request_list(request):
     search_query = _get_search_query(request)
-    if _is_admin(request.user):
-        requests = DocumentationRequest.objects.select_related(
-            "brand_materi", "jenis_led", "submitted_by"
-        ).prefetch_related(
-            "lokasi",
-            "requirements",
-            "view_photo",
-            "jenis_kamera",
-            "lokasi_assignments__lokasi",
-            "lokasi_assignments__pelaksana",
-        ).all().order_by("-id")
-    else:
-        requests = DocumentationRequest.objects.select_related(
-            "brand_materi", "jenis_led", "submitted_by"
-        ).prefetch_related(
-            "lokasi",
-            "requirements",
-            "view_photo",
-            "jenis_kamera",
-            "lokasi_assignments__lokasi",
-            "lokasi_assignments__pelaksana",
-        ).filter(
-            submitted_by=request.user
-        ).order_by("-id")
+    requests = DocumentationRequest.objects.select_related(
+        "brand_materi", "jenis_led", "submitted_by"
+    ).prefetch_related(
+        "lokasi",
+        "requirements",
+        "view_photo",
+        "jenis_kamera",
+        "lokasi_assignments__lokasi",
+        "lokasi_assignments__pelaksana",
+    ).order_by("-id")
+    if not _can_view_all_service_requests(request.user):
+        requests = requests.filter(submitted_by=request.user)
     if search_query:
         requests = requests.filter(
             _pk_search_q(search_query)
@@ -458,6 +456,9 @@ def doc_request_list(request):
         "requests": requests,
         "all_dokumentators": Dokumentator.objects.all().order_by("name"),
         "can_create_requests": _is_requester(request.user) or _is_admin(request.user),
+        "is_admin": _is_admin(request.user),
+        "is_executor": _is_executor(request.user),
+        "can_manage_pelaksana": _can_manage_service_pelaksana(request.user),
         **_search_context(request, "Cari brand, lokasi, PIC, requirement, kamera, atau user"),
     })
 
@@ -512,9 +513,8 @@ def doc_request_detail(request, pk):
         ),
         pk=pk,
     )
-    # Staff can only view own requests
-    if not _is_admin(request.user) and doc_request.submitted_by != request.user:
-        return HttpResponseForbidden("Access denied.")
+    if not _can_view_all_service_requests(request.user) and doc_request.submitted_by != request.user:
+        return _forbidden_response(request, "Anda tidak memiliki izin untuk melihat detail request ini.")
     return render(request, "products/request_detail.html", {"request": doc_request})
 
 
@@ -564,7 +564,7 @@ def doc_request_update_status(request, pk):
     return HttpResponseForbidden("POST only.")
 
 
-@admin_required
+@executor_or_admin_required
 def doc_request_update_lokasi_pelaksana(request, assignment_pk):
     """AJAX-only endpoint to update pelaksana for a request lokasi assignment."""
     if request.method == "POST":
@@ -1008,16 +1008,11 @@ def master_data_import_confirm(request, slug):
 @login_required
 def maint_request_list(request):
     search_query = _get_search_query(request)
-    if _is_admin(request.user):
-        requests_qs = MaintenanceRequest.objects.select_related(
-            "submitted_by"
-        ).prefetch_related("nama_perangkat", "inventory_items", "pelaksana").all().order_by("-id")
-    else:
-        requests_qs = MaintenanceRequest.objects.select_related(
-            "submitted_by"
-        ).prefetch_related("nama_perangkat", "inventory_items", "pelaksana").filter(
-            submitted_by=request.user
-        ).order_by("-id")
+    requests_qs = MaintenanceRequest.objects.select_related(
+        "submitted_by"
+    ).prefetch_related("nama_perangkat", "inventory_items", "pelaksana").order_by("-id")
+    if not _can_view_all_service_requests(request.user):
+        requests_qs = requests_qs.filter(submitted_by=request.user)
     if search_query:
         requests_qs = requests_qs.filter(
             _pk_search_q(search_query)
@@ -1036,6 +1031,9 @@ def maint_request_list(request):
         "requests": requests_qs,
         "all_dokumentators": Dokumentator.objects.all().order_by("name"),
         "can_create_requests": _is_requester(request.user) or _is_admin(request.user),
+        "is_admin": _is_admin(request.user),
+        "is_executor": _is_executor(request.user),
+        "can_manage_pelaksana": _can_manage_service_pelaksana(request.user),
         **_search_context(request, "Cari pemohon, departement, perangkat, inventory, atau dokumentator"),
     })
 
@@ -1069,9 +1067,14 @@ def maint_request_create(request):
 
 @login_required
 def maint_request_detail(request, pk):
-    maint_request = get_object_or_404(MaintenanceRequest, pk=pk)
-    if not _is_admin(request.user) and maint_request.submitted_by != request.user:
-        return HttpResponseForbidden("Access denied.")
+    maint_request = get_object_or_404(
+        MaintenanceRequest.objects.select_related("submitted_by").prefetch_related(
+            "nama_perangkat", "inventory_items", "pelaksana"
+        ),
+        pk=pk,
+    )
+    if not _can_view_all_service_requests(request.user) and maint_request.submitted_by != request.user:
+        return _forbidden_response(request, "Anda tidak memiliki izin untuk melihat detail request ini.")
 
     # Group the selected inventory items
     inventory_grouped = {}
@@ -1110,7 +1113,7 @@ def maint_request_update_status(request, pk):
     return HttpResponseForbidden("POST only.")
 
 
-@admin_required
+@executor_or_admin_required
 def maint_request_update_pelaksana(request, pk):
     """AJAX-only endpoint to update pelaksana for a maintenance request."""
     if request.method == "POST":
@@ -1162,6 +1165,7 @@ def jadwal_tayang_list(request):
         "is_requester": _is_requester(request.user),
         "is_executor": _is_executor(request.user),
         "is_admin": _is_admin(request.user),
+        "can_manage_pelaksana": _can_manage_service_pelaksana(request.user),
         **_search_context(request, "Cari brand, lokasi, PIC, notes, pelaksana, atau user"),
     })
 
@@ -1360,7 +1364,7 @@ def jadwal_tayang_update_status(request, pk):
     return HttpResponseForbidden("POST only.")
 
 
-@admin_required
+@executor_or_admin_required
 def jadwal_tayang_update_pelaksana(request, pk):
     if request.method == "POST":
         jt = get_object_or_404(
