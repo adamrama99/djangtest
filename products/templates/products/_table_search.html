@@ -1,4 +1,7 @@
 <form method="get" class="d-flex flex-column flex-md-row align-items-md-center gap-2">
+  {% if executor_show_done %}
+  <input type="hidden" name="show_done" value="1">
+  {% endif %}
   <div class="input-group input-group-sm">
     <span class="input-group-text">
       <i class="bi bi-search"></i>
@@ -17,7 +20,7 @@
       <i class="bi bi-search me-1"></i>Cari
     </button>
     {% if search_active %}
-    <a href="{{ request.path }}" class="btn btn-sm btn-outline-secondary">
+    <a href="{{ search_reset_url|default:request.path }}" class="btn btn-sm btn-outline-secondary">
       <i class="bi bi-x-circle me-1"></i>Reset
     </a>
     {% endif %}

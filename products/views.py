@@ -198,13 +198,29 @@ def _get_search_query(request):
 def _search_context(request, placeholder):
     params = request.GET.copy()
     params.pop("page", None)
+    reset_params = params.copy()
+    reset_params.pop("q", None)
     search_query = _get_search_query(request)
+    reset_query = reset_params.urlencode()
     return {
         "search_query": search_query,
         "search_active": bool(search_query),
         "search_placeholder": placeholder,
         "page_query": params.urlencode(),
+        "search_reset_url": f"{request.path}?{reset_query}" if reset_query else request.path,
     }
+
+
+def _url_with_query(request, **updates):
+    params = request.GET.copy()
+    params.pop("page", None)
+    for key, value in updates.items():
+        if value is None:
+            params.pop(key, None)
+        else:
+            params[key] = value
+    query = params.urlencode()
+    return f"{request.path}?{query}" if query else request.path
 
 
 def _pk_search_q(search_query):
@@ -492,6 +508,25 @@ def _filter_maint_requests_for_user(queryset, user):
     return queryset.filter(submitted_by=user)
 
 
+def _executor_done_toggle_context(request, queryset):
+    if not _is_executor(request.user) or _can_view_all_service_requests(request.user):
+        return queryset, {}
+
+    show_done = request.GET.get("show_done") == "1"
+    active_count = queryset.exclude(status="DONE").count()
+    done_count = queryset.filter(status="DONE").count()
+    filtered_queryset = queryset.filter(status="DONE") if show_done else queryset.exclude(status="DONE")
+
+    return filtered_queryset, {
+        "executor_done_toggle": True,
+        "executor_show_done": show_done,
+        "executor_active_count": active_count,
+        "executor_done_count": done_count,
+        "executor_active_url": _url_with_query(request, show_done=None),
+        "executor_done_url": _url_with_query(request, show_done="1"),
+    }
+
+
 def _can_edit_request_record(user, submitted_by):
     if not _can_access_request_edit(user):
         return False
@@ -740,6 +775,7 @@ def doc_request_list(request):
             | Q(submitted_by__first_name__icontains=search_query)
             | Q(submitted_by__last_name__icontains=search_query)
         ).distinct()
+    requests, done_toggle_context = _executor_done_toggle_context(request, requests)
     return render(request, "products/request_list.html", {
         "requests": requests,
         "all_dokumentators": _assignable_dokumentators_queryset(),
@@ -750,6 +786,7 @@ def doc_request_list(request):
         "is_executor": _is_executor(request.user),
         "can_manage_pelaksana": _can_manage_service_pelaksana(request.user),
         "can_upload_proof": _can_upload_service_proof(request.user),
+        **done_toggle_context,
         **_search_context(request, "Cari brand, lokasi, PIC, requirement, kamera, atau user"),
     })
 
@@ -1470,6 +1507,7 @@ def maint_request_list(request):
             | Q(jenis_led__name__icontains=search_query)
             | Q(pelaksana__name__icontains=search_query)
         ).distinct()
+    requests_qs, done_toggle_context = _executor_done_toggle_context(request, requests_qs)
     return render(request, "products/maint_request_list.html", {
         "requests": requests_qs,
         "all_dokumentators": _assignable_dokumentators_queryset(),
@@ -1480,6 +1518,7 @@ def maint_request_list(request):
         "is_executor": _is_executor(request.user),
         "can_manage_pelaksana": _can_manage_service_pelaksana(request.user),
         "can_upload_proof": _can_upload_service_proof(request.user),
+        **done_toggle_context,
         **_search_context(request, "Cari brand, lokasi, jenis produk, pemohon, departement, atau dokumentator"),
     })
 

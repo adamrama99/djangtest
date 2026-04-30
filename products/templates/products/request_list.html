@@ -22,6 +22,16 @@
                 <i class="bi bi-list-ul me-2"></i>All Requests
                 <span class="badge bg-secondary ms-2">{{ requests|length }}</span>
             </h3>
+            {% if executor_done_toggle %}
+            <div class="btn-group btn-group-sm" role="group" aria-label="Filter request documentation">
+                <a href="{{ executor_active_url }}" class="btn {% if executor_show_done %}btn-outline-secondary{% else %}btn-secondary{% endif %}">
+                    Aktif <span class="badge text-bg-light text-dark ms-1">{{ executor_active_count }}</span>
+                </a>
+                <a href="{{ executor_done_url }}" class="btn {% if executor_show_done %}btn-success{% else %}btn-outline-success{% endif %}">
+                    Sudah Selesai <span class="badge text-bg-light text-dark ms-1">{{ executor_done_count }}</span>
+                </a>
+            </div>
+            {% endif %}
             {% include "products/_table_search.html" %}
         </div>
     </div>
@@ -154,7 +164,11 @@
                     <td colspan="{% if can_manage_pelaksana %}14{% else %}13{% endif %}" class="text-center text-muted py-5">
                         <i class="bi bi-inbox display-6 d-block mb-2"></i>
                         {% if search_active %}
-                        Tidak ada request yang cocok dengan "{{ search_query }}". <a href="{% url 'doc_request_list' %}">Reset pencarian</a>.
+                        Tidak ada request yang cocok dengan "{{ search_query }}". <a href="{{ search_reset_url }}">Reset pencarian</a>.
+                        {% elif executor_done_toggle and executor_show_done %}
+                        Belum ada request documentation yang sudah selesai.
+                        {% elif executor_done_toggle %}
+                        Tidak ada request documentation aktif. <a href="{{ executor_done_url }}">Lihat yang sudah selesai</a>.
                         {% else %}
                         No requests yet.{% if can_create_requests %} <a href="{% url 'doc_request_create' %}">Create one now</a>.{% endif %}
                         {% endif %}
@@ -166,7 +180,7 @@
     </div>
     {% if requests %}
     <div class="card-footer text-muted small">
-        Showing {{ requests|length }} request{{ requests|length|pluralize }}{% if search_active %} for "{{ search_query }}"{% endif %}
+        Showing {{ requests|length }} request{{ requests|length|pluralize }}{% if executor_done_toggle %} {% if executor_show_done %}yang sudah selesai{% else %}aktif{% endif %}{% endif %}{% if search_active %} for "{{ search_query }}"{% endif %}
     </div>
     {% endif %}
 </div>

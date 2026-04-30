@@ -471,6 +471,71 @@ class RequestCreationPermissionTests(TestCase):
         self.assertContains(maint_response, "Pemohon Executor")
         self.assertNotContains(maint_response, "Pemohon Hidden")
 
+    def test_executor_can_toggle_completed_doc_and_maintenance_rows(self):
+        completed_brand = BrandMateri.objects.create(name="Brand Completed Executor")
+        completed_doc = DocumentationRequest.objects.create(
+            submitted_by=self.requester,
+            brand=completed_brand,
+            jenis_led=self.led_type,
+            tanggal=date.today(),
+            note="Catatan selesai executor",
+            pic_pemohon="PIC Completed Executor",
+            status="DONE",
+        )
+        completed_doc.lokasi.set([self.lokasi])
+        completed_doc.requirements.set([self.requirement])
+        completed_doc.view_photo.set([self.view_photo])
+        completed_doc.jenis_kamera.set([self.camera_type])
+        DocumentationRequestMateri.objects.create(
+            documentation_request=completed_doc,
+            nama_materi="Materi Completed Executor",
+            sort_order=0,
+        )
+        completed_doc.lokasi_assignments.get(lokasi=self.lokasi).pelaksana.set([self.executor_dokumentator])
+
+        completed_maint = MaintenanceRequest.objects.create(
+            submitted_by=self.requester,
+            nama_pemohon="Pemohon Completed Executor",
+            departement="IT Done",
+            tanggal_permintaan=date.today(),
+            tanggal_deadline=date.today() + timedelta(days=1),
+            brand=completed_brand,
+            deskripsi_pekerjaan="Maintenance selesai executor",
+            status="DONE",
+        )
+        completed_maint.lokasi.set([self.lokasi])
+        completed_maint.jenis_led.set([self.maint_led_type])
+        completed_maint.pelaksana.set([self.executor_dokumentator])
+        MaintenanceRequestMateri.objects.create(
+            maintenance_request=completed_maint,
+            nama_materi="Materi Maintenance Completed",
+            sort_order=0,
+        )
+
+        self.client.force_login(self.executor)
+
+        active_doc_response = self.client.get(reverse("doc_request_list"))
+        active_maint_response = self.client.get(reverse("maint_request_list"))
+        done_doc_response = self.client.get(reverse("doc_request_list"), {"show_done": "1"})
+        done_maint_response = self.client.get(reverse("maint_request_list"), {"show_done": "1"})
+        done_doc_detail = self.client.get(reverse("doc_request_detail", args=[completed_doc.pk]))
+        done_maint_detail = self.client.get(reverse("maint_request_detail", args=[completed_maint.pk]))
+
+        self.assertContains(active_doc_response, "Brand Executor Access")
+        self.assertNotContains(active_doc_response, "Brand Completed Executor")
+        self.assertContains(active_doc_response, "Sudah Selesai")
+        self.assertContains(active_maint_response, "Pemohon Executor")
+        self.assertNotContains(active_maint_response, "Pemohon Completed Executor")
+        self.assertContains(active_maint_response, "Sudah Selesai")
+
+        self.assertContains(done_doc_response, "Brand Completed Executor")
+        self.assertNotContains(done_doc_response, "PIC Executor")
+        self.assertContains(done_maint_response, "Pemohon Completed Executor")
+        self.assertNotContains(done_maint_response, "Pemohon Executor")
+
+        self.assertEqual(done_doc_detail.status_code, 200)
+        self.assertEqual(done_maint_detail.status_code, 200)
+
     def test_executor_can_view_only_assigned_detail_pages(self):
         self.client.force_login(self.executor)
 
