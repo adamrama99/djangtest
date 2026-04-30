@@ -6,22 +6,25 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponse, HttpResponseForbidden
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import BooleanField, Case, Exists, OuterRef, Q, Value, When
+from django.db.models import BooleanField, Case, Q, Value, When
 from django.template.loader import render_to_string
 from django.utils import timezone
 from .models import (
     DocumentationRequest, LEDType, Requirement, ViewPhoto, cameratype,
     BrandMateri, Lokasi, Dokumentator, DocumentationRequestLokasiAssignment, EditHistory,
-    MaintenanceRequest,
-    JadwalTayang, JadwalTayangFotoTayang, JadwalTayangBuktiPlaylist, JadwalTayangFotoTakeout,
+    DocumentationRequestMateri,
+    MaintenanceRequest, MaintenanceRequestMateri,
+    JadwalTayang, JadwalTayangMateri, JadwalTayangFotoTayang, JadwalTayangBuktiPlaylist, JadwalTayangFotoTakeout,
     TakeoutAlertRule,
     UserLoginRequirement,
 )
 from .forms import (
     DocumentationRequestForm,
+    DocumentationRequestEditForm,
     DocumentationRequestProofForm,
     MasterDataForm,
     MaintenanceRequestForm,
+    MaintenanceRequestEditForm,
     MaintenanceRequestProofForm,
     JadwalTayangForm,
     JadwalTayangEditForm,
@@ -156,7 +159,7 @@ def _assignable_dokumentators_queryset():
 
 
 def _doc_request_label(doc_request):
-    brand = doc_request.brand_materi.name if doc_request.brand_materi else "N/A"
+    brand = doc_request.brand.name if doc_request.brand else "N/A"
     label = f"{brand} - {doc_request.tanggal}"
     if not getattr(doc_request, "pk", None):
         return label
@@ -172,7 +175,7 @@ def _doc_request_label(doc_request):
 
 
 def _jadwal_tayang_label(jadwal_tayang):
-    brand = jadwal_tayang.brand_materi.name if jadwal_tayang.brand_materi else "N/A"
+    brand = jadwal_tayang.brand.name if jadwal_tayang.brand else "N/A"
     label = f"{brand} - {jadwal_tayang.tanggal_tayang}"
     if not getattr(jadwal_tayang, "pk", None):
         return label
@@ -232,50 +235,171 @@ def _jadwal_tayang_photo_status_info(jadwal_tayang, now=None):
     if now is None:
         now = timezone.now()
 
-    has_foto_tayang = bool(getattr(jadwal_tayang, "has_foto_tayang", False))
-    has_foto_takeout = bool(getattr(jadwal_tayang, "has_foto_takeout", False))
-    has_bukti_playlist = bool(getattr(jadwal_tayang, "has_bukti_playlist", False))
+    materi_items = list(jadwal_tayang.materi_items.all())
+    total_materi = len(materi_items)
+    if not total_materi:
+        return {
+            "label": "Belum Ada Materi",
+            "badge_class": "secondary",
+            "detail": "Tambahkan materi sebelum executor upload foto.",
+        }
 
-    if has_foto_takeout:
+    foto_tayang_count = sum(1 for materi in materi_items if materi.foto_tayang_set.exists())
+    foto_takeout_count = sum(1 for materi in materi_items if materi.foto_takeout_set.exists())
+    bukti_playlist_count = sum(1 for materi in materi_items if _materi_has_bukti_playlist(materi))
+
+    if foto_takeout_count == total_materi:
         return {
             "label": "Sudah Upload Foto Takeout",
             "badge_class": "success",
-            "detail": "Foto takeout sudah tersedia.",
+            "detail": f"{foto_takeout_count}/{total_materi} materi sudah punya foto takeout.",
         }
 
     if now > jadwal_tayang.tanggal_takeout:
         return {
             "label": "Belum Takeout",
             "badge_class": "danger",
-            "detail": "Waktu takeout sudah lewat, tetapi foto takeout belum ada.",
+            "detail": f"Waktu takeout sudah lewat. Foto takeout {foto_takeout_count}/{total_materi} materi.",
         }
 
-    if has_foto_tayang and has_bukti_playlist:
+    if foto_tayang_count == total_materi and bukti_playlist_count == total_materi:
         return {
             "label": "Sudah Upload Foto Tayang + Playlist",
             "badge_class": "primary",
-            "detail": "Foto tayang dan bukti playlist sudah tersedia.",
+            "detail": f"Foto tayang dan playlist lengkap untuk {total_materi} materi.",
         }
 
-    if has_foto_tayang:
+    if foto_tayang_count or bukti_playlist_count:
         return {
-            "label": "Sudah Upload Foto Tayang",
+            "label": "Upload Foto Parsial",
             "badge_class": "info",
-            "detail": "Foto tayang sudah tersedia.",
-        }
-
-    if has_bukti_playlist:
-        return {
-            "label": "Sudah Upload Bukti Playlist",
-            "badge_class": "info",
-            "detail": "Bukti playlist sudah tersedia.",
+            "detail": f"Foto tayang {foto_tayang_count}/{total_materi}, playlist {bukti_playlist_count}/{total_materi}.",
         }
 
     return {
         "label": "Belum Upload Foto",
         "badge_class": "secondary",
-        "detail": "Belum ada foto tayang, bukti playlist, atau foto takeout.",
+        "detail": f"Belum ada foto untuk {total_materi} materi.",
     }
+
+
+def _materi_has_bukti_playlist(materi):
+    try:
+        bukti = materi.bukti_playlist
+    except JadwalTayangBuktiPlaylist.DoesNotExist:
+        return False
+    return bool(bukti.foto_pagi or bukti.foto_siang or bukti.foto_malam)
+
+
+def _extract_materi_rows(post_data):
+    materi_ids = post_data.getlist("materi_ids[]")
+    materi_names = post_data.getlist("materi_names[]")
+    max_len = max(len(materi_ids), len(materi_names))
+    rows = []
+
+    for index in range(max_len):
+        raw_id = materi_ids[index].strip() if index < len(materi_ids) else ""
+        nama_materi = materi_names[index].strip() if index < len(materi_names) else ""
+        if not nama_materi:
+            continue
+        rows.append({
+            "id": raw_id if raw_id.isdigit() else "",
+            "nama_materi": nama_materi,
+        })
+
+    return rows
+
+
+def _initial_materi_rows(jadwal_tayang=None):
+    if jadwal_tayang and jadwal_tayang.pk:
+        rows = [
+            {"id": str(materi.id), "nama_materi": materi.nama_materi}
+            for materi in jadwal_tayang.materi_items.order_by("sort_order", "id")
+        ]
+        if rows:
+            return rows
+    return [{"id": "", "nama_materi": ""}]
+
+
+def _sync_jadwal_tayang_materi(jadwal_tayang, materi_rows):
+    existing = {
+        str(materi.id): materi
+        for materi in jadwal_tayang.materi_items.all()
+    }
+    keep_ids = []
+
+    for index, row in enumerate(materi_rows):
+        materi = existing.get(row["id"])
+        if materi:
+            if materi.nama_materi != row["nama_materi"] or materi.sort_order != index:
+                materi.nama_materi = row["nama_materi"]
+                materi.sort_order = index
+                materi.save(update_fields=["nama_materi", "sort_order"])
+        else:
+            materi = JadwalTayangMateri.objects.create(
+                jadwal_tayang=jadwal_tayang,
+                nama_materi=row["nama_materi"],
+                sort_order=index,
+            )
+        keep_ids.append(materi.id)
+
+    jadwal_tayang.materi_items.exclude(id__in=keep_ids).delete()
+    jadwal_tayang.auto_update_status()
+
+
+def _sync_documentation_request_materi(doc_request, materi_rows):
+    existing = {
+        str(materi.id): materi
+        for materi in doc_request.materi_items.all()
+    }
+    keep_ids = []
+
+    for index, row in enumerate(materi_rows):
+        materi = existing.get(row["id"])
+        if materi:
+            if materi.nama_materi != row["nama_materi"] or materi.sort_order != index:
+                materi.nama_materi = row["nama_materi"]
+                materi.sort_order = index
+                materi.save(update_fields=["nama_materi", "sort_order"])
+        else:
+            materi = DocumentationRequestMateri.objects.create(
+                documentation_request=doc_request,
+                nama_materi=row["nama_materi"],
+                sort_order=index,
+            )
+        keep_ids.append(materi.id)
+
+    doc_request.materi_items.exclude(id__in=keep_ids).delete()
+
+
+def _sync_maintenance_request_materi(maint_request, materi_rows):
+    existing = {
+        str(materi.id): materi
+        for materi in maint_request.materi_items.all()
+    }
+    keep_ids = []
+
+    for index, row in enumerate(materi_rows):
+        materi = existing.get(row["id"])
+        if materi:
+            if materi.nama_materi != row["nama_materi"] or materi.sort_order != index:
+                materi.nama_materi = row["nama_materi"]
+                materi.sort_order = index
+                materi.save(update_fields=["nama_materi", "sort_order"])
+        else:
+            materi = MaintenanceRequestMateri.objects.create(
+                maintenance_request=maint_request,
+                nama_materi=row["nama_materi"],
+                sort_order=index,
+            )
+        keep_ids.append(materi.id)
+
+    maint_request.materi_items.exclude(id__in=keep_ids).delete()
+
+
+def _materi_display_from_rows(materi_rows):
+    names = [row["nama_materi"] for row in materi_rows]
+    return ", ".join(names) if names else "-"
 
 
 def _contains_search_value(search_query, *values):
@@ -389,10 +513,37 @@ def _format_file_for_history(field_file):
     return os.path.basename(field_file.name)
 
 
+def _validate_uploaded_image_size(uploaded_file):
+    if uploaded_file and hasattr(uploaded_file, "size") and uploaded_file.size > 10 * 1024 * 1024:
+        return "Ukuran file maksimal 10 MB."
+    return ""
+
+
+def _proof_status_from_materi(materi_items):
+    total_materi = len(materi_items)
+    if not total_materi:
+        return "TODO"
+    proof_count = sum(1 for materi in materi_items if materi.foto_bukti_kerja)
+    if proof_count == total_materi:
+        return "DONE"
+    if proof_count:
+        return "IN_PROGRESS"
+    return "TODO"
+
+
+def _sync_parent_status_from_materi_proofs(request_obj, materi_items):
+    new_status = _proof_status_from_materi(materi_items)
+    if request_obj.status != new_status:
+        request_obj.status = new_status
+        request_obj.save(update_fields=["status"])
+    return new_status
+
+
 def _doc_request_edit_snapshot(doc_request):
     return {
-        "Brand / Materi": doc_request.brand_materi.name if doc_request.brand_materi else "-",
+        "Brand": doc_request.brand.name if doc_request.brand else "-",
         "Lokasi": doc_request.lokasi_display(),
+        "Materi": doc_request.materi_display(),
         "Jenis Produk": doc_request.jenis_led.name if doc_request.jenis_led else "-",
         "Tanggal": doc_request.tanggal.strftime("%d/%m/%Y") if doc_request.tanggal else "-",
         "Requirements": _joined_names(doc_request.requirements, empty_label="-"),
@@ -405,15 +556,14 @@ def _doc_request_edit_snapshot(doc_request):
 
 def _jadwal_tayang_edit_snapshot(jadwal_tayang):
     return {
-        "Brand / Materi": jadwal_tayang.brand_materi.name if jadwal_tayang.brand_materi else "-",
+        "Brand": jadwal_tayang.brand.name if jadwal_tayang.brand else "-",
         "Lokasi": jadwal_tayang.lokasi_display(),
+        "Materi": jadwal_tayang.materi_display(),
         "Jenis Produk": jadwal_tayang.jenis_led.name if jadwal_tayang.jenis_led else "-",
         "Tanggal Tayang": _format_datetime_for_history(jadwal_tayang.tanggal_tayang),
         "Tanggal Takeout": _format_datetime_for_history(jadwal_tayang.tanggal_takeout),
         "PIC Pemohon": jadwal_tayang.pic_pemohon or "-",
         "Notes Requester": jadwal_tayang.note_requester or "-",
-        "Foto Referensi Requester": _format_file_for_history(jadwal_tayang.foto_referensi_requester),
-        "Link Foto Google Drive": jadwal_tayang.link_foto_drive_requester or "-",
     }
 
 
@@ -428,6 +578,8 @@ def _serialize_notification_for_json(notification):
         "takeout_at_display": notification["takeout_at_display"],
         "offset_display": notification["offset_display"],
         "time_status": notification["time_status"],
+        "pending_materi_label": notification["pending_materi_label"],
+        "progress_label": notification["progress_label"],
     }
 
 
@@ -522,16 +674,16 @@ def dashboard(request):
 
     # Recent items
     recent_docs = doc_qs.select_related(
-        'brand_materi', 'jenis_led', 'submitted_by'
+        'brand', 'jenis_led', 'submitted_by'
     ).prefetch_related(
-        'lokasi'
+        'lokasi', 'materi_items'
     ).order_by('-created_at')[:5]
     recent_maints = maint_qs.select_related(
-        'submitted_by'
-    ).order_by('-created_at')[:5]
+        'submitted_by', 'brand'
+    ).prefetch_related('lokasi', 'materi_items').order_by('-created_at')[:5]
     recent_jt = jt_qs.select_related(
-        'brand_materi', 'jenis_led', 'submitted_by'
-    ).prefetch_related('lokasi').order_by('-created_at')[:5]
+        'brand', 'jenis_led', 'submitted_by'
+    ).prefetch_related('lokasi', 'materi_items').order_by('-created_at')[:5]
 
     return render(request, "products/dashboard.html", {
         "total_requests": total_requests,
@@ -560,9 +712,10 @@ def doc_request_list(request):
     search_query = _get_search_query(request)
     requests = _filter_doc_requests_for_user(
         DocumentationRequest.objects.select_related(
-        "brand_materi", "jenis_led", "submitted_by"
+        "brand", "jenis_led", "submitted_by"
     ).prefetch_related(
         "lokasi",
+        "materi_items",
         "requirements",
         "view_photo",
         "jenis_kamera",
@@ -574,7 +727,8 @@ def doc_request_list(request):
     if search_query:
         requests = requests.filter(
             _pk_search_q(search_query)
-            | Q(brand_materi__name__icontains=search_query)
+            | Q(brand__name__icontains=search_query)
+            | Q(materi_items__nama_materi__icontains=search_query)
             | Q(lokasi__name__icontains=search_query)
             | Q(jenis_led__name__icontains=search_query)
             | Q(requirements__name__icontains=search_query)
@@ -603,7 +757,10 @@ def doc_request_list(request):
 @requester_or_admin_required
 def doc_request_create(request):
     form = DocumentationRequestForm(request.POST or None)
-    if request.method == "POST" and form.is_valid():
+    materi_rows = _extract_materi_rows(request.POST) if request.method == "POST" else _initial_materi_rows()
+    if request.method == "POST" and not materi_rows:
+        form.add_error(None, "Isi minimal satu materi.")
+    if request.method == "POST" and form.is_valid() and materi_rows:
         lokasi_list = list(form.cleaned_data["lokasi"])
         requirements = list(form.cleaned_data["requirements"])
         view_photo = list(form.cleaned_data["view_photo"])
@@ -613,7 +770,7 @@ def doc_request_create(request):
             for lokasi in lokasi_list:
                 doc_req = DocumentationRequest.objects.create(
                     submitted_by=request.user,
-                    brand_materi=form.cleaned_data["brand_materi"],
+                    brand=form.cleaned_data["brand"],
                     jenis_led=form.cleaned_data["jenis_led"],
                     tanggal=form.cleaned_data["tanggal"],
                     note=form.cleaned_data["note"],
@@ -623,25 +780,31 @@ def doc_request_create(request):
                 doc_req.requirements.set(requirements)
                 doc_req.view_photo.set(view_photo)
                 doc_req.jenis_kamera.set(jenis_kamera)
+                _sync_documentation_request_materi(doc_req, materi_rows)
                 _create_edit_history(
                     user=request.user,
                     action="CREATE",
                     request_type=EditHistory.RequestType.DOC_REQUEST,
                     object_id=doc_req.id,
                     label=_doc_request_label(doc_req),
-                    new_value=f"Request baru dibuat untuk lokasi {lokasi.name}",
+                    new_value=f"Request baru dibuat untuk lokasi {lokasi.name} dengan materi: {_materi_display_from_rows(materi_rows)}",
                 )
         return redirect("doc_request_list")
-    return render(request, "products/request_form.html", {"form": form, "title": "Create Documentation Request"})
+    return render(request, "products/request_form.html", {
+        "form": form,
+        "title": "Create Documentation Request",
+        "materi_rows": materi_rows,
+    })
 
 
 @requester_staff_or_admin_required
 def doc_request_edit(request, pk):
     doc_request = get_object_or_404(
         DocumentationRequest.objects.select_related(
-            "submitted_by", "brand_materi", "jenis_led"
+            "submitted_by", "brand", "jenis_led"
         ).prefetch_related(
             "lokasi",
+            "materi_items",
             "requirements",
             "view_photo",
             "jenis_kamera",
@@ -651,12 +814,21 @@ def doc_request_edit(request, pk):
     if not _can_edit_request_record(request.user, doc_request.submitted_by):
         return _forbidden_response(request, "Anda tidak memiliki izin untuk mengedit request ini.")
 
-    form = DocumentationRequestForm(request.POST or None, instance=doc_request)
+    form = DocumentationRequestEditForm(request.POST or None, instance=doc_request)
+    materi_rows = _extract_materi_rows(request.POST) if request.method == "POST" else _initial_materi_rows(doc_request)
     old_values = _doc_request_edit_snapshot(doc_request) if request.method == "POST" else None
 
-    if request.method == "POST" and form.is_valid():
+    if request.method == "POST" and not materi_rows:
+        form.add_error(None, "Isi minimal satu materi.")
+    if request.method == "POST" and form.is_valid() and materi_rows:
         with transaction.atomic():
-            doc_request = form.save()
+            doc_request = form.save(commit=False)
+            doc_request.save()
+            doc_request.lokasi.set([form.cleaned_data["lokasi"]])
+            doc_request.requirements.set(form.cleaned_data["requirements"])
+            doc_request.view_photo.set(form.cleaned_data["view_photo"])
+            doc_request.jenis_kamera.set(form.cleaned_data["jenis_kamera"])
+            _sync_documentation_request_materi(doc_request, materi_rows)
             doc_request.refresh_from_db()
             new_values = _doc_request_edit_snapshot(doc_request)
             label = _doc_request_label(doc_request)
@@ -680,6 +852,7 @@ def doc_request_edit(request, pk):
         "title": "Edit Documentation Request",
         "is_edit": True,
         "doc_request": doc_request,
+        "materi_rows": materi_rows,
     })
 
 
@@ -687,9 +860,10 @@ def doc_request_edit(request, pk):
 def doc_request_detail(request, pk):
     doc_request = get_object_or_404(
         DocumentationRequest.objects.select_related(
-            "submitted_by", "brand_materi", "jenis_led"
+            "submitted_by", "brand", "jenis_led"
         ).prefetch_related(
             "lokasi",
+            "materi_items",
             "requirements",
             "view_photo",
             "jenis_kamera",
@@ -701,38 +875,60 @@ def doc_request_detail(request, pk):
     if not _filter_doc_requests_for_user(DocumentationRequest.objects.filter(pk=pk), request.user).exists():
         return _forbidden_response(request, "Anda tidak memiliki izin untuk melihat detail request ini.")
 
-    proof_form = DocumentationRequestProofForm(instance=doc_request)
+    proof_error = ""
     can_upload_proof = _can_upload_service_proof(request.user)
+    materi_items = list(doc_request.materi_items.all())
 
     if request.method == "POST":
         if not can_upload_proof:
             return _forbidden_response(request, "Anda tidak memiliki izin untuk upload bukti kerja.")
-        proof_form = DocumentationRequestProofForm(request.POST, request.FILES, instance=doc_request)
-        if proof_form.is_valid():
+        uploaded_files = [
+            request.FILES.get(f"foto_bukti_kerja_{materi.id}")
+            for materi in materi_items
+        ]
+        proof_error = next(
+            (
+                _validate_uploaded_image_size(uploaded_file)
+                for uploaded_file in uploaded_files
+                if _validate_uploaded_image_size(uploaded_file)
+            ),
+            "",
+        )
+        if not proof_error:
             old_status = doc_request.get_status_display()
-            old_file = _format_file_for_history(doc_request.foto_bukti_kerja)
-            doc_request = proof_form.save(commit=False)
-            doc_request.status = "DONE"
-            doc_request.save()
-            new_file = _format_file_for_history(doc_request.foto_bukti_kerja)
-            if old_file != new_file:
+            label = _doc_request_label(doc_request)
+            changed_any = False
+            for materi in materi_items:
+                uploaded_file = request.FILES.get(f"foto_bukti_kerja_{materi.id}")
+                if not uploaded_file:
+                    continue
+                changed_any = True
+                old_file = _format_file_for_history(materi.foto_bukti_kerja)
+                if materi.foto_bukti_kerja and materi.foto_bukti_kerja.storage.exists(materi.foto_bukti_kerja.name):
+                    materi.foto_bukti_kerja.delete(save=False)
+                materi.foto_bukti_kerja = uploaded_file
+                materi.save(update_fields=["foto_bukti_kerja"])
+                new_file = _format_file_for_history(materi.foto_bukti_kerja)
                 _create_edit_history(
                     user=request.user,
                     action="UPDATE",
                     request_type=EditHistory.RequestType.DOC_REQUEST,
                     object_id=doc_request.id,
-                    label=_doc_request_label(doc_request),
-                    field_name="Foto Bukti Kerja",
+                    label=label,
+                    field_name=f"Foto Bukti Kerja ({materi.nama_materi})",
                     old_value=old_file,
                     new_value=new_file,
                 )
-            if old_status != doc_request.get_status_display():
+            if changed_any:
+                _sync_parent_status_from_materi_proofs(doc_request, materi_items)
+                doc_request.refresh_from_db(fields=["status"])
+            if changed_any and old_status != doc_request.get_status_display():
                 _create_edit_history(
                     user=request.user,
                     action="UPDATE",
                     request_type=EditHistory.RequestType.DOC_REQUEST,
                     object_id=doc_request.id,
-                    label=_doc_request_label(doc_request),
+                    label=label,
                     field_name="Status",
                     old_value=old_status,
                     new_value=doc_request.get_status_display(),
@@ -741,7 +937,7 @@ def doc_request_detail(request, pk):
 
     return render(request, "products/request_detail.html", {
         "request": doc_request,
-        "proof_form": proof_form,
+        "proof_error": proof_error,
         "can_upload_proof": can_upload_proof,
         "can_edit_request": _can_edit_request_record(request.user, doc_request.submitted_by),
         "is_admin": _is_admin(request.user),
@@ -836,6 +1032,18 @@ def ajax_create_lokasi(request):
         return JsonResponse({"success": True, "id": obj.id, "name": obj.name})
     return HttpResponseForbidden("POST only.")
 
+
+@login_required
+def ajax_create_brand(request):
+    """Allow any logged-in user to create a new Brand via AJAX."""
+    if request.method == "POST":
+        name = request.POST.get("name", "").strip()
+        if not name:
+            return JsonResponse({"success": False, "error": "Name is required"}, status=400)
+        obj, created = BrandMateri.objects.get_or_create(name=name)
+        return JsonResponse({"success": True, "id": obj.id, "name": obj.name})
+    return HttpResponseForbidden("POST only.")
+
 # --- Edit History (Admin Only) ---
 
 @admin_required
@@ -883,6 +1091,8 @@ def notification_list(request):
                 notification["takeout_at_display"],
                 notification["time_status"],
                 notification["title"],
+                notification["pending_materi_label"],
+                notification["progress_label"],
                 notification["jadwal_tayang_id"],
                 notification["rule_id"],
             )
@@ -989,7 +1199,7 @@ def takeout_alert_rule_delete(request, pk):
 # --- Master Data Views (Admin Only) ---
 
 MASTER_DATA_REGISTRY = {
-    "brand-materi": {"model": BrandMateri, "label": "Brand / Materi", "icon": "bi-tag"},
+    "brand-materi": {"model": BrandMateri, "label": "Brand", "icon": "bi-tag"},
     "lokasi": {"model": Lokasi, "label": "Lokasi", "icon": "bi-geo-alt"},
     "dokumentator": {"model": Dokumentator, "label": "Dokumentator", "icon": "bi-person-video3"},
     "led-type": {"model": LEDType, "label": "Jenis Produk", "icon": "bi-lightbulb"},
@@ -1239,15 +1449,16 @@ def maint_request_list(request):
     search_query = _get_search_query(request)
     requests_qs = _filter_maint_requests_for_user(
         MaintenanceRequest.objects.select_related(
-        "submitted_by", "brand_materi"
-    ).prefetch_related("lokasi", "jenis_led", "pelaksana").order_by("-id")
+        "submitted_by", "brand"
+    ).prefetch_related("lokasi", "materi_items", "jenis_led", "pelaksana").order_by("-id")
         ,
         request.user,
     )
     if search_query:
         requests_qs = requests_qs.filter(
             _pk_search_q(search_query)
-            | Q(brand_materi__name__icontains=search_query)
+            | Q(brand__name__icontains=search_query)
+            | Q(materi_items__nama_materi__icontains=search_query)
             | Q(lokasi__name__icontains=search_query)
             | Q(nama_pemohon__icontains=search_query)
             | Q(departement__icontains=search_query)
@@ -1276,16 +1487,37 @@ def maint_request_list(request):
 @requester_or_admin_required
 def maint_request_create(request):
     form = MaintenanceRequestForm(request.POST or None, request.FILES or None)
-    if request.method == "POST" and form.is_valid():
-        maint_req = form.save(commit=False)
-        maint_req.submitted_by = request.user
-        maint_req.save()
-        form.save_m2m()
+    materi_rows = _extract_materi_rows(request.POST) if request.method == "POST" else _initial_materi_rows()
+    if request.method == "POST" and not materi_rows:
+        form.add_error(None, "Isi minimal satu materi.")
+    if request.method == "POST" and form.is_valid() and materi_rows:
+        lokasi_list = list(form.cleaned_data["lokasi"])
+        jenis_led = list(form.cleaned_data["jenis_led"])
+        foto_kerusakan = form.cleaned_data.get("foto_kerusakan")
+
+        with transaction.atomic():
+            for lokasi in lokasi_list:
+                if foto_kerusakan and hasattr(foto_kerusakan, "seek"):
+                    foto_kerusakan.seek(0)
+                maint_req = MaintenanceRequest.objects.create(
+                    submitted_by=request.user,
+                    nama_pemohon=form.cleaned_data["nama_pemohon"],
+                    departement=form.cleaned_data["departement"],
+                    tanggal_permintaan=form.cleaned_data["tanggal_permintaan"],
+                    tanggal_deadline=form.cleaned_data["tanggal_deadline"],
+                    brand=form.cleaned_data["brand"],
+                    deskripsi_pekerjaan=form.cleaned_data["deskripsi_pekerjaan"],
+                    foto_kerusakan=foto_kerusakan,
+                )
+                maint_req.lokasi.set([lokasi])
+                maint_req.jenis_led.set(jenis_led)
+                _sync_maintenance_request_materi(maint_req, materi_rows)
         return redirect("maint_request_list")
 
     return render(request, "products/maint_request_form.html", {
         "form": form,
         "title": "Request Maintenance & Troubleshoot LED",
+        "materi_rows": materi_rows,
     })
 
 
@@ -1293,16 +1525,23 @@ def maint_request_create(request):
 def maint_request_edit(request, pk):
     maint_request = get_object_or_404(
         MaintenanceRequest.objects.select_related(
-            "submitted_by", "brand_materi"
-        ).prefetch_related("lokasi", "jenis_led", "pelaksana"),
+            "submitted_by", "brand"
+        ).prefetch_related("lokasi", "materi_items", "jenis_led", "pelaksana"),
         pk=pk,
     )
     if not _can_edit_request_record(request.user, maint_request.submitted_by):
         return _forbidden_response(request, "Anda tidak memiliki izin untuk mengedit request ini.")
 
-    form = MaintenanceRequestForm(request.POST or None, request.FILES or None, instance=maint_request)
-    if request.method == "POST" and form.is_valid():
-        maint_request = form.save()
+    form = MaintenanceRequestEditForm(request.POST or None, request.FILES or None, instance=maint_request)
+    materi_rows = _extract_materi_rows(request.POST) if request.method == "POST" else _initial_materi_rows(maint_request)
+    if request.method == "POST" and not materi_rows:
+        form.add_error(None, "Isi minimal satu materi.")
+    if request.method == "POST" and form.is_valid() and materi_rows:
+        maint_request = form.save(commit=False)
+        maint_request.save()
+        maint_request.lokasi.set([form.cleaned_data["lokasi"]])
+        maint_request.jenis_led.set(form.cleaned_data["jenis_led"])
+        _sync_maintenance_request_materi(maint_request, materi_rows)
         return redirect("maint_request_detail", pk=maint_request.pk)
 
     return render(request, "products/maint_request_form.html", {
@@ -1310,6 +1549,7 @@ def maint_request_edit(request, pk):
         "title": "Edit Maintenance & Troubleshoot LED Request",
         "is_edit": True,
         "maint_request": maint_request,
+        "materi_rows": materi_rows,
     })
 
 
@@ -1317,30 +1557,51 @@ def maint_request_edit(request, pk):
 def maint_request_detail(request, pk):
     maint_request = get_object_or_404(
         MaintenanceRequest.objects.select_related(
-            "submitted_by", "brand_materi"
+            "submitted_by", "brand"
         ).prefetch_related(
-            "lokasi", "jenis_led", "pelaksana"
+            "lokasi", "materi_items", "jenis_led", "pelaksana"
         ),
         pk=pk,
     )
     if not _filter_maint_requests_for_user(MaintenanceRequest.objects.filter(pk=pk), request.user).exists():
         return _forbidden_response(request, "Anda tidak memiliki izin untuk melihat detail request ini.")
-    proof_form = MaintenanceRequestProofForm(instance=maint_request)
+    proof_error = ""
     can_upload_proof = _can_upload_service_proof(request.user)
+    materi_items = list(maint_request.materi_items.all())
 
     if request.method == "POST":
         if not can_upload_proof:
             return _forbidden_response(request, "Anda tidak memiliki izin untuk upload bukti kerja.")
-        proof_form = MaintenanceRequestProofForm(request.POST, request.FILES, instance=maint_request)
-        if proof_form.is_valid():
-            maint_request = proof_form.save(commit=False)
-            maint_request.status = "DONE"
-            maint_request.save()
+        uploaded_files = [
+            request.FILES.get(f"foto_bukti_kerja_{materi.id}")
+            for materi in materi_items
+        ]
+        proof_error = next(
+            (
+                _validate_uploaded_image_size(uploaded_file)
+                for uploaded_file in uploaded_files
+                if _validate_uploaded_image_size(uploaded_file)
+            ),
+            "",
+        )
+        if not proof_error:
+            changed_any = False
+            for materi in materi_items:
+                uploaded_file = request.FILES.get(f"foto_bukti_kerja_{materi.id}")
+                if not uploaded_file:
+                    continue
+                changed_any = True
+                if materi.foto_bukti_kerja and materi.foto_bukti_kerja.storage.exists(materi.foto_bukti_kerja.name):
+                    materi.foto_bukti_kerja.delete(save=False)
+                materi.foto_bukti_kerja = uploaded_file
+                materi.save(update_fields=["foto_bukti_kerja"])
+            if changed_any:
+                _sync_parent_status_from_materi_proofs(maint_request, materi_items)
             return redirect("maint_request_detail", pk=maint_request.pk)
 
     return render(request, "products/maint_request_detail.html", {
         "req": maint_request,
-        "proof_form": proof_form,
+        "proof_error": proof_error,
         "can_upload_proof": can_upload_proof,
         "can_edit_request": _can_edit_request_record(request.user, maint_request.submitted_by),
         "is_admin": _is_admin(request.user),
@@ -1386,25 +1647,24 @@ def maint_request_update_pelaksana(request, pk):
 @login_required
 def jadwal_tayang_list(request):
     search_query = _get_search_query(request)
-    foto_tayang_exists = JadwalTayangFotoTayang.objects.filter(jadwal_tayang_id=OuterRef("pk"))
-    foto_takeout_exists = JadwalTayangFotoTakeout.objects.filter(jadwal_tayang_id=OuterRef("pk"))
-    bukti_playlist_exists = JadwalTayangBuktiPlaylist.objects.filter(jadwal_tayang_id=OuterRef("pk"))
     qs = JadwalTayang.objects.select_related(
-        "brand_materi", "jenis_led", "submitted_by"
-    ).prefetch_related("lokasi", "pelaksana").annotate(
-        has_foto_tayang=Exists(foto_tayang_exists),
-        has_foto_takeout=Exists(foto_takeout_exists),
-        has_bukti_playlist=Exists(bukti_playlist_exists),
+        "brand", "jenis_led", "submitted_by"
+    ).prefetch_related(
+        "lokasi",
+        "pelaksana",
+        "materi_items__foto_tayang_set",
+        "materi_items__foto_takeout_set",
+        "materi_items__bukti_playlist",
     ).all()
     if search_query:
         qs = qs.filter(
             _pk_search_q(search_query)
-            | Q(brand_materi__name__icontains=search_query)
+            | Q(brand__name__icontains=search_query)
+            | Q(materi_items__nama_materi__icontains=search_query)
             | Q(lokasi__name__icontains=search_query)
             | Q(jenis_led__name__icontains=search_query)
             | Q(note_requester__icontains=search_query)
             | Q(note_executor__icontains=search_query)
-            | Q(link_foto_drive_requester__icontains=search_query)
             | Q(pic_pemohon__icontains=search_query)
             | Q(status__icontains=search_query)
             | Q(submitted_by__username__icontains=search_query)
@@ -1432,8 +1692,8 @@ def jadwal_tayang_report(request):
     search_query = _get_search_query(request)
     now = timezone.now()
     qs = JadwalTayang.objects.select_related(
-        "brand_materi", "jenis_led", "submitted_by"
-    ).prefetch_related("lokasi", "pelaksana").filter(
+        "brand", "jenis_led", "submitted_by"
+    ).prefetch_related("lokasi", "pelaksana", "materi_items").filter(
         tanggal_tayang__lte=now,
         tanggal_takeout__gte=now,
     )
@@ -1441,12 +1701,12 @@ def jadwal_tayang_report(request):
     if search_query:
         qs = qs.filter(
             _pk_search_q(search_query)
-            | Q(brand_materi__name__icontains=search_query)
+            | Q(brand__name__icontains=search_query)
+            | Q(materi_items__nama_materi__icontains=search_query)
             | Q(lokasi__name__icontains=search_query)
             | Q(jenis_led__name__icontains=search_query)
             | Q(note_requester__icontains=search_query)
             | Q(note_executor__icontains=search_query)
-            | Q(link_foto_drive_requester__icontains=search_query)
             | Q(pic_pemohon__icontains=search_query)
             | Q(submitted_by__username__icontains=search_query)
             | Q(submitted_by__first_name__icontains=search_query)
@@ -1467,56 +1727,59 @@ def jadwal_tayang_report(request):
 
 @requester_or_admin_required
 def jadwal_tayang_create(request):
-    form = JadwalTayangForm(request.POST or None, request.FILES or None)
-    if request.method == "POST" and form.is_valid():
+    form = JadwalTayangForm(request.POST or None)
+    materi_rows = _extract_materi_rows(request.POST) if request.method == "POST" else _initial_materi_rows()
+    if request.method == "POST" and not materi_rows:
+        form.add_error(None, "Isi minimal satu materi.")
+    if request.method == "POST" and form.is_valid() and materi_rows:
         lokasi_list = list(form.cleaned_data["lokasi"])
-        foto_referensi_requester = form.cleaned_data.get("foto_referensi_requester")
         with transaction.atomic():
             for lokasi in lokasi_list:
-                if foto_referensi_requester and hasattr(foto_referensi_requester, "seek"):
-                    foto_referensi_requester.seek(0)
                 jt = JadwalTayang(
                     submitted_by=request.user,
-                    brand_materi=form.cleaned_data["brand_materi"],
+                    brand=form.cleaned_data["brand"],
                     jenis_led=form.cleaned_data["jenis_led"],
                     tanggal_tayang=form.cleaned_data["tanggal_tayang"],
                     tanggal_takeout=form.cleaned_data["tanggal_takeout"],
                     note_requester=form.cleaned_data["note_requester"],
-                    link_foto_drive_requester=form.cleaned_data["link_foto_drive_requester"],
                     pic_pemohon=form.cleaned_data["pic_pemohon"],
                 )
-                if foto_referensi_requester:
-                    jt.foto_referensi_requester = foto_referensi_requester
                 jt.save()
                 jt.lokasi.set([lokasi])
+                _sync_jadwal_tayang_materi(jt, materi_rows)
                 _create_edit_history(
                     user=request.user,
                     action="CREATE",
                     request_type=EditHistory.RequestType.JADWAL_TAYANG,
                     object_id=jt.id,
                     label=_jadwal_tayang_label(jt),
-                    new_value=f"Jadwal tayang baru dibuat untuk lokasi {lokasi.name}",
+                    new_value=f"Jadwal tayang baru dibuat untuk lokasi {lokasi.name} dengan materi: {_materi_display_from_rows(materi_rows)}",
                 )
         return redirect("jadwal_tayang_list")
     return render(request, "products/jadwal_tayang_form.html", {
         "form": form,
         "title": "Buat Jadwal Tayang",
+        "materi_rows": materi_rows,
     })
 
 
 @requester_or_admin_required
 def jadwal_tayang_edit(request, pk):
     jt = get_object_or_404(
-        JadwalTayang.objects.select_related("brand_materi", "jenis_led").prefetch_related("lokasi"),
+        JadwalTayang.objects.select_related("brand", "jenis_led").prefetch_related("lokasi", "materi_items"),
         pk=pk,
     )
-    form = JadwalTayangEditForm(request.POST or None, request.FILES or None, instance=jt)
+    form = JadwalTayangEditForm(request.POST or None, instance=jt)
+    materi_rows = _extract_materi_rows(request.POST) if request.method == "POST" else _initial_materi_rows(jt)
     old_values = _jadwal_tayang_edit_snapshot(jt) if request.method == "POST" else None
-    if request.method == "POST" and form.is_valid():
+    if request.method == "POST" and not materi_rows:
+        form.add_error(None, "Isi minimal satu materi.")
+    if request.method == "POST" and form.is_valid() and materi_rows:
         with transaction.atomic():
             jt = form.save(commit=False)
             jt.save()
             jt.lokasi.set([form.cleaned_data["lokasi"]])
+            _sync_jadwal_tayang_materi(jt, materi_rows)
             jt.refresh_from_db()
             new_values = _jadwal_tayang_edit_snapshot(jt)
             label = _jadwal_tayang_label(jt)
@@ -1539,6 +1802,7 @@ def jadwal_tayang_edit(request, pk):
         "title": "Edit Jadwal Tayang",
         "is_edit": True,
         "jadwal_tayang": jt,
+        "materi_rows": materi_rows,
     })
 
 
@@ -1546,23 +1810,30 @@ def jadwal_tayang_edit(request, pk):
 def jadwal_tayang_detail(request, pk):
     jt = get_object_or_404(
         JadwalTayang.objects.select_related(
-            "submitted_by", "brand_materi", "jenis_led"
+            "submitted_by", "brand", "jenis_led"
         ).prefetch_related(
             "lokasi", "pelaksana",
-            "foto_tayang_set", "foto_takeout_set",
+            "materi_items__foto_tayang_set",
+            "materi_items__foto_takeout_set",
+            "materi_items__bukti_playlist",
+        ),
+        pk=pk,
+    )
+    jt.auto_update_status()
+    jt = get_object_or_404(
+        JadwalTayang.objects.select_related(
+            "submitted_by", "brand", "jenis_led"
+        ).prefetch_related(
+            "lokasi", "pelaksana",
+            "materi_items__foto_tayang_set",
+            "materi_items__foto_takeout_set",
+            "materi_items__bukti_playlist",
         ),
         pk=pk,
     )
 
-    # Get bukti playlist if exists
-    try:
-        bukti_playlist = jt.bukti_playlist
-    except JadwalTayangBuktiPlaylist.DoesNotExist:
-        bukti_playlist = None
-
     return render(request, "products/jadwal_tayang_detail.html", {
         "jt": jt,
-        "bukti_playlist": bukti_playlist,
         "is_requester": _is_requester(request.user),
         "is_executor": _is_executor(request.user),
         "is_admin": _is_admin(request.user),
@@ -1572,7 +1843,7 @@ def jadwal_tayang_detail(request, pk):
 @admin_required
 def jadwal_tayang_delete(request, pk):
     jt = get_object_or_404(
-        JadwalTayang.objects.select_related("brand_materi").prefetch_related("lokasi"),
+        JadwalTayang.objects.select_related("brand").prefetch_related("lokasi"),
         pk=pk,
     )
     if request.method == "POST":
@@ -1595,7 +1866,7 @@ def jadwal_tayang_delete(request, pk):
 def jadwal_tayang_update_status(request, pk):
     if request.method == "POST":
         jt = get_object_or_404(
-            JadwalTayang.objects.select_related("brand_materi").prefetch_related("lokasi"),
+            JadwalTayang.objects.select_related("brand").prefetch_related("lokasi"),
             pk=pk,
         )
         old_status = jt.get_status_display()
@@ -1625,7 +1896,7 @@ def jadwal_tayang_update_status(request, pk):
 def jadwal_tayang_update_pelaksana(request, pk):
     if request.method == "POST":
         jt = get_object_or_404(
-            JadwalTayang.objects.select_related("brand_materi").prefetch_related("lokasi"),
+            JadwalTayang.objects.select_related("brand").prefetch_related("lokasi"),
             pk=pk,
         )
         old_names = _joined_names(jt.pelaksana)
@@ -1648,10 +1919,15 @@ def jadwal_tayang_update_pelaksana(request, pk):
 
 
 @executor_or_admin_required
-def jadwal_tayang_upload_photos(request, pk):
+def _legacy_jadwal_tayang_upload_photos(request, pk):
     """Executor/Admin upload photos & notes for a Jadwal Tayang."""
     jt = get_object_or_404(
-        JadwalTayang.objects.select_related("brand_materi").prefetch_related("lokasi"),
+        JadwalTayang.objects.select_related("brand").prefetch_related(
+            "lokasi",
+            "materi_items__foto_tayang_set",
+            "materi_items__foto_takeout_set",
+            "materi_items__bukti_playlist",
+        ),
         pk=pk,
     )
 
@@ -1660,8 +1936,7 @@ def jadwal_tayang_upload_photos(request, pk):
         old_status = jt.get_status_display()
         old_note_executor = jt.note_executor
         old_pelaksana = _joined_names(jt.pelaksana)
-        initial_foto_tayang_count = jt.foto_tayang_set.count()
-        initial_foto_takeout_count = jt.foto_takeout_set.count()
+        materi_items = list(jt.materi_items.all())
 
         uploader_dokumentator, _ = _get_or_create_dokumentator_for_user(request.user)
         if uploader_dokumentator:
@@ -1790,6 +2065,173 @@ def jadwal_tayang_upload_photos(request, pk):
             )
 
         return redirect("jadwal_tayang_detail", pk=pk)
+
+    return redirect("jadwal_tayang_detail", pk=pk)
+
+
+@executor_or_admin_required
+def jadwal_tayang_upload_photos(request, pk):
+    """Executor/Admin upload photos & notes for each materi in a Jadwal Tayang."""
+    jt = get_object_or_404(
+        JadwalTayang.objects.select_related("brand").prefetch_related(
+            "lokasi",
+            "materi_items__foto_tayang_set",
+            "materi_items__foto_takeout_set",
+            "materi_items__bukti_playlist",
+        ),
+        pk=pk,
+    )
+
+    if request.method != "POST":
+        return redirect("jadwal_tayang_detail", pk=pk)
+
+    label = _jadwal_tayang_label(jt)
+    old_status = jt.get_status_display()
+    old_note_executor = jt.note_executor
+    old_pelaksana = _joined_names(jt.pelaksana)
+    materi_items = list(jt.materi_items.all())
+    old_materi_statuses = {
+        materi.id: materi.get_status_display()
+        for materi in materi_items
+    }
+
+    uploader_dokumentator, _ = _get_or_create_dokumentator_for_user(request.user)
+    if uploader_dokumentator:
+        jt.pelaksana.add(uploader_dokumentator)
+        new_pelaksana = _joined_names(jt.pelaksana)
+        if old_pelaksana != new_pelaksana:
+            _create_edit_history(
+                user=request.user,
+                action="UPDATE",
+                request_type=EditHistory.RequestType.JADWAL_TAYANG,
+                object_id=pk,
+                label=label,
+                field_name="Pelaksana",
+                old_value=old_pelaksana,
+                new_value=new_pelaksana,
+            )
+
+    note_executor = request.POST.get("note_executor", "").strip()
+    if note_executor and note_executor != old_note_executor:
+        jt.note_executor = note_executor
+        jt.save(update_fields=["note_executor"])
+        _create_edit_history(
+            user=request.user,
+            action="UPDATE",
+            request_type=EditHistory.RequestType.JADWAL_TAYANG,
+            object_id=pk,
+            label=label,
+            field_name="Notes Executor",
+            old_value=old_note_executor or "-",
+            new_value=note_executor,
+        )
+
+    for materi in materi_items:
+        initial_foto_tayang_count = materi.foto_tayang_set.count()
+        initial_foto_takeout_count = materi.foto_takeout_set.count()
+
+        foto_tayang_files = request.FILES.getlist(f"foto_tayang_{materi.id}")
+        for uploaded_file in foto_tayang_files:
+            JadwalTayangFotoTayang.objects.create(materi=materi, foto=uploaded_file)
+        if foto_tayang_files:
+            _create_edit_history(
+                user=request.user,
+                action="UPDATE",
+                request_type=EditHistory.RequestType.JADWAL_TAYANG,
+                object_id=pk,
+                label=label,
+                field_name=f"Foto Tayang ({materi.nama_materi})",
+                old_value=f"{initial_foto_tayang_count} foto",
+                new_value=f"{materi.foto_tayang_set.count()} foto (+{len(foto_tayang_files)} baru)",
+            )
+
+        foto_pagi = request.FILES.get(f"foto_playlist_pagi_{materi.id}")
+        foto_siang = request.FILES.get(f"foto_playlist_siang_{materi.id}")
+        foto_malam = request.FILES.get(f"foto_playlist_malam_{materi.id}")
+        if foto_pagi or foto_siang or foto_malam:
+            bukti, _ = JadwalTayangBuktiPlaylist.objects.get_or_create(materi=materi)
+            before_slots = []
+            if bukti.foto_pagi:
+                before_slots.append("Pagi")
+            if bukti.foto_siang:
+                before_slots.append("Siang")
+            if bukti.foto_malam:
+                before_slots.append("Malam")
+            if foto_pagi:
+                if bukti.foto_pagi and bukti.foto_pagi.storage.exists(bukti.foto_pagi.name):
+                    bukti.foto_pagi.delete(save=False)
+                bukti.foto_pagi = foto_pagi
+            if foto_siang:
+                if bukti.foto_siang and bukti.foto_siang.storage.exists(bukti.foto_siang.name):
+                    bukti.foto_siang.delete(save=False)
+                bukti.foto_siang = foto_siang
+            if foto_malam:
+                if bukti.foto_malam and bukti.foto_malam.storage.exists(bukti.foto_malam.name):
+                    bukti.foto_malam.delete(save=False)
+                bukti.foto_malam = foto_malam
+            bukti.save()
+            after_slots = []
+            if bukti.foto_pagi:
+                after_slots.append("Pagi")
+            if bukti.foto_siang:
+                after_slots.append("Siang")
+            if bukti.foto_malam:
+                after_slots.append("Malam")
+            _create_edit_history(
+                user=request.user,
+                action="UPDATE",
+                request_type=EditHistory.RequestType.JADWAL_TAYANG,
+                object_id=pk,
+                label=label,
+                field_name=f"Bukti Playlist ({materi.nama_materi})",
+                old_value=", ".join(before_slots) or "-",
+                new_value=", ".join(after_slots) or "-",
+            )
+
+        foto_takeout_files = request.FILES.getlist(f"foto_takeout_{materi.id}")
+        for uploaded_file in foto_takeout_files:
+            JadwalTayangFotoTakeout.objects.create(materi=materi, foto=uploaded_file)
+        if foto_takeout_files:
+            _create_edit_history(
+                user=request.user,
+                action="UPDATE",
+                request_type=EditHistory.RequestType.JADWAL_TAYANG,
+                object_id=pk,
+                label=label,
+                field_name=f"Foto Takeout ({materi.nama_materi})",
+                old_value=f"{initial_foto_takeout_count} foto",
+                new_value=f"{materi.foto_takeout_set.count()} foto (+{len(foto_takeout_files)} baru)",
+            )
+
+        materi.auto_update_status()
+        materi.refresh_from_db(fields=["status"])
+        new_materi_status = materi.get_status_display()
+        if old_materi_statuses.get(materi.id) != new_materi_status:
+            _create_edit_history(
+                user=request.user,
+                action="UPDATE",
+                request_type=EditHistory.RequestType.JADWAL_TAYANG,
+                object_id=pk,
+                label=label,
+                field_name=f"Status Materi ({materi.nama_materi})",
+                old_value=old_materi_statuses.get(materi.id, "-"),
+                new_value=new_materi_status,
+            )
+
+    jt.auto_update_status()
+    jt.refresh_from_db(fields=["status"])
+    new_status = jt.get_status_display()
+    if old_status != new_status:
+        _create_edit_history(
+            user=request.user,
+            action="UPDATE",
+            request_type=EditHistory.RequestType.JADWAL_TAYANG,
+            object_id=pk,
+            label=label,
+            field_name="Status",
+            old_value=old_status,
+            new_value=new_status,
+        )
 
     return redirect("jadwal_tayang_detail", pk=pk)
 

@@ -54,6 +54,7 @@
           <th>Urgency</th>
           <th>Rule</th>
           <th>Jadwal</th>
+          <th>Materi Belum Takeout</th>
           <th>Takeout</th>
           <th>Status Waktu</th>
           <th style="width:120px" class="text-center">Aksi</th>
@@ -76,6 +77,10 @@
             <div class="fw-semibold">{{ notification.jadwal_label }}</div>
             <div class="small text-muted">{{ notification.message }}</div>
           </td>
+          <td>
+            <div class="fw-semibold">{{ notification.pending_materi_label }}</div>
+            <div class="small text-muted">{{ notification.progress_label }}</div>
+          </td>
           <td class="small">{{ notification.takeout_at_display }}</td>
           <td>
             <span class="badge text-bg-secondary">{{ notification.time_status }}</span>
@@ -88,7 +93,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="7" class="text-center text-muted py-5">
+          <td colspan="8" class="text-center text-muted py-5">
             <i class="bi bi-bell-slash display-6 d-block mb-2"></i>
             {% if search_active %}
             Tidak ada notifikasi yang cocok dengan "{{ search_query }}". <a href="{% url 'notification_list' %}">Reset pencarian</a>.

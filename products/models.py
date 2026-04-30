@@ -80,7 +80,7 @@ class DocumentationRequest(models.Model):
         related_name="doc_requests",
         verbose_name="Submitted By",
     )
-    brand_materi = models.ForeignKey(BrandMateri, on_delete=models.SET_NULL, null=True, verbose_name="Brand / Materi")
+    brand = models.ForeignKey(BrandMateri, on_delete=models.SET_NULL, null=True, verbose_name="Brand")
     lokasi = models.ManyToManyField(Lokasi, verbose_name="Lokasi")
     jenis_led = models.ForeignKey(LEDType, on_delete=models.SET_NULL, null=True, verbose_name="Jenis Produk")
     tanggal = models.DateField()
@@ -99,7 +99,7 @@ class DocumentationRequest(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        brand = self.brand_materi.name if self.brand_materi else "N/A"
+        brand = self.brand.name if self.brand else "N/A"
         return f"{brand} - {self.tanggal}"
 
     def lokasi_names(self):
@@ -124,6 +124,41 @@ class DocumentationRequest(models.Model):
                 if lokasi_id not in existing_lokasi_ids
             ]
         )
+
+    def materi_names(self):
+        return list(self.materi_items.order_by("sort_order", "id").values_list("nama_materi", flat=True))
+
+    def materi_display(self):
+        names = self.materi_names()
+        return ", ".join(names) if names else "-"
+
+
+class DocumentationRequestMateri(models.Model):
+    documentation_request = models.ForeignKey(
+        DocumentationRequest,
+        on_delete=models.CASCADE,
+        related_name="materi_items",
+    )
+    nama_materi = models.CharField("Materi", max_length=200)
+    foto_bukti_kerja = models.ImageField(
+        "Foto Bukti Kerja",
+        upload_to="doc_request_proofs/",
+        blank=True,
+        null=True,
+    )
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+        verbose_name = "Materi Documentation Request"
+        verbose_name_plural = "Materi Documentation Request"
+
+    def __str__(self):
+        return self.nama_materi
+
+    @property
+    def has_foto_bukti_kerja(self):
+        return bool(self.foto_bukti_kerja)
 
 
 class DocumentationRequestLokasiAssignment(models.Model):
@@ -240,12 +275,12 @@ class MaintenanceRequest(models.Model):
     departement = models.CharField("Departement", max_length=150)
     tanggal_permintaan = models.DateField("Tanggal Permintaan")
     tanggal_deadline = models.DateField("Tanggal Deadline")
-    brand_materi = models.ForeignKey(
+    brand = models.ForeignKey(
         BrandMateri,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        verbose_name="Brand / Materi",
+        verbose_name="Brand",
     )
     lokasi = models.ManyToManyField(Lokasi, blank=True, verbose_name="Lokasi")
     jenis_led = models.ManyToManyField(LEDType, verbose_name="Jenis Produk")
@@ -279,6 +314,41 @@ class MaintenanceRequest(models.Model):
         names = self.jenis_produk_names()
         return ", ".join(names) if names else "-"
 
+    def materi_names(self):
+        return list(self.materi_items.order_by("sort_order", "id").values_list("nama_materi", flat=True))
+
+    def materi_display(self):
+        names = self.materi_names()
+        return ", ".join(names) if names else "-"
+
+
+class MaintenanceRequestMateri(models.Model):
+    maintenance_request = models.ForeignKey(
+        MaintenanceRequest,
+        on_delete=models.CASCADE,
+        related_name="materi_items",
+    )
+    nama_materi = models.CharField("Materi", max_length=200)
+    foto_bukti_kerja = models.ImageField(
+        "Foto Bukti Kerja",
+        upload_to="maintenance_proofs/",
+        blank=True,
+        null=True,
+    )
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+        verbose_name = "Materi Maintenance Request"
+        verbose_name_plural = "Materi Maintenance Request"
+
+    def __str__(self):
+        return self.nama_materi
+
+    @property
+    def has_foto_bukti_kerja(self):
+        return bool(self.foto_bukti_kerja)
+
 
 class JadwalTayang(models.Model):
     STATUS_CHOICES = [
@@ -293,9 +363,9 @@ class JadwalTayang(models.Model):
         related_name="jadwal_tayang_requests",
         verbose_name="Submitted By",
     )
-    brand_materi = models.ForeignKey(
+    brand = models.ForeignKey(
         BrandMateri, on_delete=models.SET_NULL, null=True,
-        verbose_name="Brand / Materi",
+        verbose_name="Brand",
     )
     lokasi = models.ManyToManyField(Lokasi, verbose_name="Lokasi")
     jenis_led = models.ForeignKey(
@@ -329,19 +399,32 @@ class JadwalTayang(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        brand = self.brand_materi.name if self.brand_materi else "N/A"
+        brand = self.brand.name if self.brand else "N/A"
         return f"{brand} - {self.tanggal_tayang}"
 
+    @property
+    def status_badge_class(self):
+        if self.status == 'SUDAH_TAKEOUT':
+            return "success"
+        if self.status == 'SEDANG_TAYANG':
+            return "info"
+        return "secondary"
+
     def auto_update_status(self):
-        """Auto-set status based on uploaded photos."""
-        has_foto_takeout = self.foto_takeout_set.exists()
-        has_foto_tayang = self.foto_tayang_set.exists()
-        if has_foto_takeout:
-            new_status = 'SUDAH_TAKEOUT'
-        elif has_foto_tayang:
-            new_status = 'SEDANG_TAYANG'
-        else:
+        """Auto-set parent status from the least-progressed materi status."""
+        materi_items = list(JadwalTayangMateri.objects.filter(jadwal_tayang=self))
+        if not materi_items:
             new_status = 'BELUM_TAYANG'
+        else:
+            statuses = []
+            for materi in materi_items:
+                statuses.append(materi.auto_update_status())
+            if JadwalTayangMateri.Status.BELUM_TAYANG in statuses:
+                new_status = self.STATUS_CHOICES[0][0]
+            elif JadwalTayangMateri.Status.SEDANG_TAYANG in statuses:
+                new_status = self.STATUS_CHOICES[1][0]
+            else:
+                new_status = self.STATUS_CHOICES[2][0]
         if self.status != new_status:
             self.status = new_status
             self.save(update_fields=['status'])
@@ -353,10 +436,73 @@ class JadwalTayang(models.Model):
         names = self.lokasi_names()
         return ", ".join(names) if names else "-"
 
+    def materi_names(self):
+        return list(self.materi_items.order_by("sort_order", "id").values_list("nama_materi", flat=True))
+
+    def materi_display(self):
+        names = self.materi_names()
+        return ", ".join(names) if names else "-"
+
+
+class JadwalTayangMateri(models.Model):
+    class Status(models.TextChoices):
+        BELUM_TAYANG = "BELUM_TAYANG", "Belum Tayang"
+        SEDANG_TAYANG = "SEDANG_TAYANG", "Sedang Tayang"
+        SUDAH_TAKEOUT = "SUDAH_TAKEOUT", "Sudah Takeout"
+
+    jadwal_tayang = models.ForeignKey(
+        JadwalTayang,
+        on_delete=models.CASCADE,
+        related_name="materi_items",
+    )
+    nama_materi = models.CharField("Materi", max_length=200)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.BELUM_TAYANG,
+    )
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+        verbose_name = "Materi Jadwal Tayang"
+        verbose_name_plural = "Materi Jadwal Tayang"
+
+    def __str__(self):
+        return self.nama_materi
+
+    @property
+    def status_badge_class(self):
+        if self.status == self.Status.SUDAH_TAKEOUT:
+            return "success"
+        if self.status == self.Status.SEDANG_TAYANG:
+            return "info"
+        return "secondary"
+
+    def has_bukti_playlist(self):
+        try:
+            bukti = self.bukti_playlist
+        except JadwalTayangBuktiPlaylist.DoesNotExist:
+            return False
+        return bool(bukti.foto_pagi or bukti.foto_siang or bukti.foto_malam)
+
+    def calculate_status(self):
+        if self.foto_takeout_set.exists():
+            return self.Status.SUDAH_TAKEOUT
+        if self.foto_tayang_set.exists() or self.has_bukti_playlist():
+            return self.Status.SEDANG_TAYANG
+        return self.Status.BELUM_TAYANG
+
+    def auto_update_status(self):
+        new_status = self.calculate_status()
+        if self.status != new_status:
+            self.status = new_status
+            self.save(update_fields=["status"])
+        return new_status
 
 class JadwalTayangFotoTayang(models.Model):
-    jadwal_tayang = models.ForeignKey(
-        JadwalTayang, on_delete=models.CASCADE,
+    materi = models.ForeignKey(
+        JadwalTayangMateri, on_delete=models.CASCADE,
         related_name="foto_tayang_set",
     )
     foto = models.ImageField("Foto Tayang", upload_to="jadwal_tayang/tayang/")
@@ -366,12 +512,12 @@ class JadwalTayangFotoTayang(models.Model):
         ordering = ['uploaded_at']
 
     def __str__(self):
-        return f"Foto Tayang #{self.pk} - {self.jadwal_tayang}"
+        return f"Foto Tayang #{self.pk} - {self.materi}"
 
 
 class JadwalTayangBuktiPlaylist(models.Model):
-    jadwal_tayang = models.OneToOneField(
-        JadwalTayang, on_delete=models.CASCADE,
+    materi = models.OneToOneField(
+        JadwalTayangMateri, on_delete=models.CASCADE,
         related_name="bukti_playlist",
     )
     foto_pagi = models.ImageField(
@@ -389,12 +535,12 @@ class JadwalTayangBuktiPlaylist(models.Model):
     uploaded_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Bukti Playlist - {self.jadwal_tayang}"
+        return f"Bukti Playlist - {self.materi}"
 
 
 class JadwalTayangFotoTakeout(models.Model):
-    jadwal_tayang = models.ForeignKey(
-        JadwalTayang, on_delete=models.CASCADE,
+    materi = models.ForeignKey(
+        JadwalTayangMateri, on_delete=models.CASCADE,
         related_name="foto_takeout_set",
     )
     foto = models.ImageField("Foto Takeout", upload_to="jadwal_tayang/takeout/")
@@ -404,7 +550,7 @@ class JadwalTayangFotoTakeout(models.Model):
         ordering = ['uploaded_at']
 
     def __str__(self):
-        return f"Foto Takeout #{self.pk} - {self.jadwal_tayang}"
+        return f"Foto Takeout #{self.pk} - {self.materi}"
 
 
 class TakeoutAlertRule(models.Model):

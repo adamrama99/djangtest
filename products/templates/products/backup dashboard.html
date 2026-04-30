@@ -315,7 +315,7 @@
           <table class="table table-hover mb-0 align-middle">
             <thead>
               <tr class="small text-uppercase text-secondary">
-                <th class="ps-3">Brand / Materi</th>
+                <th class="ps-3">Brand</th>
                 <th>Lokasi</th>
                 <th>Status</th>
                 <th class="pe-3">Tanggal</th>
@@ -324,7 +324,7 @@
             <tbody>
               {% for doc in recent_docs %}
               <tr>
-                <td class="ps-3 fw-semibold">{{ doc.brand_materi|default:"-" }}</td>
+                <td class="ps-3 fw-semibold">{{ doc.brand|default:"-" }}</td>
                 <td class="text-secondary">{{ doc.lokasi_display }}</td>
                 <td>
                   {% if doc.status == 'TODO' %}
@@ -410,7 +410,7 @@
           <table class="table table-hover mb-0 align-middle">
             <thead>
               <tr class="small text-uppercase text-secondary">
-                <th class="ps-3">Brand / Materi</th>
+                <th class="ps-3">Brand</th>
                 <th>Lokasi</th>
                 <th>Tgl Tayang</th>
                 <th>Tgl Takeout</th>
@@ -421,7 +421,7 @@
             <tbody>
               {% for jt in recent_jt %}
               <tr>
-                <td class="ps-3 fw-semibold">{{ jt.brand_materi|default:"-" }}</td>
+                <td class="ps-3 fw-semibold">{{ jt.brand|default:"-" }}</td>
                 <td class="text-secondary">{{ jt.lokasi_display }}</td>
                 <td class="text-secondary small">{{ jt.tanggal_tayang|date:"d M Y H:i" }}</td>
                 <td class="text-secondary small">{{ jt.tanggal_takeout|date:"d M Y H:i" }}</td>

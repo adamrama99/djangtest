@@ -36,13 +36,14 @@
                 <tr>
                     <th style="width:50px">#</th>
                     <th>Submitted</th>
-                    <th>Brand / Materi</th>
+                    <th>Brand</th>
+                    <th>Materi</th>
                     <th>Lokasi</th>
                     <th>Jenis Produk</th>
                     <th>Tgl Tayang</th>
                     <th>Tgl Takeout</th>
                     <th>PIC</th>
-                    <th>Status Foto</th>
+                    <th>Status</th>
                     {% if can_manage_pelaksana %}
                     <th>Pelaksana</th>
                     {% endif %}
@@ -55,8 +56,18 @@
                     <td class="text-muted">{{ req.id }}</td>
                     <td class="text-muted small">{{ req.created_at|date:"d/m/Y H:i" }}</td>
                     <td>
-                        <div class="fw-semibold">{{ req.brand_materi }}</div>
+                        <div class="fw-semibold">{{ req.brand|default:"-" }}</div>
                         <div class="text-muted small">{{ req.submitted_by.get_full_name|default:req.submitted_by.username }}</div>
+                    </td>
+                    <td>
+                        {% for materi in req.materi_items.all %}
+                        <div class="{% if not forloop.last %}mb-1{% endif %}">
+                            <span class="badge text-bg-secondary">{{ materi.nama_materi }}</span>
+                            <span class="badge text-bg-{{ materi.status_badge_class }}">{{ materi.get_status_display }}</span>
+                        </div>
+                        {% empty %}
+                        <span class="text-muted small">Belum ada materi</span>
+                        {% endfor %}
                     </td>
                     <td>{{ req.lokasi_display }}</td>
                     <td>
@@ -68,6 +79,8 @@
                     <td class="small">{{ req.tanggal_takeout|date:"d M Y H:i" }}</td>
                     <td>{{ req.pic_pemohon }}</td>
                     <td>
+                        <span class="badge text-bg-{{ req.status_badge_class }}">{{ req.get_status_display }}</span>
+                        <div class="text-muted small mt-1">Status parent</div>
                         <span class="badge text-bg-{{ req.photo_status_info.badge_class }}">{{ req.photo_status_info.label }}</span>
                         <div class="text-muted small mt-1">{{ req.photo_status_info.detail }}</div>
                     </td>
@@ -100,7 +113,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="{% if can_manage_pelaksana %}11{% else %}10{% endif %}" class="text-center text-muted py-5">
+                    <td colspan="{% if can_manage_pelaksana %}12{% else %}11{% endif %}" class="text-center text-muted py-5">
                         <i class="bi bi-inbox display-6 d-block mb-2"></i>
                         {% if search_active %}
                         Tidak ada jadwal tayang yang cocok dengan "{{ search_query }}". <a href="{% url 'jadwal_tayang_list' %}">Reset pencarian</a>.

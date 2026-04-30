@@ -19,6 +19,12 @@
     .form-check { margin-bottom: 0; padding-top: 5px; padding-bottom: 5px; }
     .form-check-label { cursor: pointer; font-weight: normal !important; }
     .field-container { margin-bottom: 25px; }
+    .materi-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+        align-items: start;
+    }
 </style>
 {% endblock %}
 
@@ -106,12 +112,12 @@
 
                     <div class="row">
                         <div class="col-lg-6 mb-3">
-                            <label for="{{ form.brand_materi.id_for_label }}" class="form-label fw-bold">
-                                Brand / Materi <span class="text-danger">*</span>
+                            <label for="{{ form.brand.id_for_label }}" class="form-label fw-bold">
+                                Brand <span class="text-danger">*</span>
                             </label>
-                            {{ form.brand_materi }}
-                            {% if form.brand_materi.errors %}
-                            <div class="text-danger small mt-1">{% for error in form.brand_materi.errors %}{{ error }}{% endfor %}</div>
+                            {{ form.brand }}
+                            {% if form.brand.errors %}
+                            <div class="text-danger small mt-1">{% for error in form.brand.errors %}{{ error }}{% endfor %}</div>
                             {% endif %}
                         </div>
 
@@ -126,9 +132,36 @@
                         </div>
                         <div class="col-12">
                             <div class="text-muted small mt-1">
-                                <i class="bi bi-info-circle me-1"></i>Anda bisa pilih satu atau beberapa lokasi untuk request maintenance ini.
+                                {% if is_edit %}
+                                <i class="bi bi-info-circle me-1"></i>Edit request ini tetap untuk satu lokasi.
+                                {% else %}
+                                <i class="bi bi-info-circle me-1"></i>Pilih satu atau beberapa lokasi. Sistem akan membuat satu request maintenance terpisah per lokasi.
+                                {% endif %}
                             </div>
                         </div>
+                    </div>
+
+                    <hr class="my-4 opacity-25">
+
+                    <div class="field-container">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="form-label fw-bold mb-0">Materi <span class="text-danger">*</span></label>
+                            <button type="button" class="btn btn-sm btn-outline-danger" id="addMateriRow">
+                                <i class="bi bi-plus-lg me-1"></i>Tambah Materi
+                            </button>
+                        </div>
+                        <div id="materiRows" class="d-flex flex-column gap-2">
+                            {% for row in materi_rows %}
+                            <div class="materi-row">
+                                <input type="hidden" name="materi_ids[]" value="{{ row.id }}">
+                                <input type="text" name="materi_names[]" value="{{ row.nama_materi }}" class="form-control" placeholder="Nama materi" required>
+                                <button type="button" class="btn btn-outline-danger remove-materi-row" title="Hapus materi">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <div class="form-text">Isi satu atau beberapa materi maintenance.</div>
                     </div>
 
                     <hr class="my-4 opacity-25">
@@ -196,18 +229,61 @@
         </div>
     </div>
 </div>
+
+<template id="materiRowTemplate">
+    <div class="materi-row">
+        <input type="hidden" name="materi_ids[]" value="">
+        <input type="text" name="materi_names[]" class="form-control" placeholder="Nama materi" required>
+        <button type="button" class="btn btn-outline-danger remove-materi-row" title="Hapus materi">
+            <i class="bi bi-trash"></i>
+        </button>
+    </div>
+</template>
 {% endblock %}
 
 {% block extra_js %}
 <script>
   function initMaintenanceRequestFormSelect2() {
-    const $brand = $('#id_brand_materi');
+    const csrfToken = document.querySelector('form [name=csrfmiddlewaretoken]')?.value;
+    const $brand = $('#id_brand');
     if ($brand.length) {
       $brand.select2({
         theme: 'bootstrap-5',
-        placeholder: 'Pilih Brand / Materi...',
+        placeholder: 'Pilih Brand...',
         allowClear: true,
         width: '100%',
+        tags: true,
+        createTag: function(params) {
+          const term = $.trim(params.term);
+          if (term === '') return null;
+          return { id: '_new_' + term, text: term, newTag: true };
+        },
+        templateResult: function(data) {
+          if (data.newTag) {
+            return $('<span><i class="bi bi-plus-circle me-1 text-success"></i>Tambah: <strong>' + data.text + '</strong></span>');
+          }
+          return data.text;
+        },
+      });
+
+      $brand.on('select2:select', function(e) {
+        const data = e.params.data;
+        if (data.id && data.id.toString().startsWith('_new_')) {
+          $.ajax({
+            url: '{% url "ajax_create_brand" %}',
+            method: 'POST',
+            data: { name: data.text, csrfmiddlewaretoken: csrfToken },
+            success: function(resp) {
+              if (resp.success) {
+                $brand.find('option[value="' + data.id + '"]').remove();
+                $brand.append(new Option(resp.name, resp.id, true, true)).trigger('change');
+              }
+            },
+            error: function() {
+              alert('Gagal menambahkan brand baru.');
+            }
+          });
+        }
       });
     }
 
@@ -215,11 +291,11 @@
     if ($lokasi.length) {
       $lokasi.select2({
         theme: 'bootstrap-5',
-        placeholder: 'Pilih satu atau beberapa lokasi...',
+        placeholder: '{% if is_edit %}Pilih lokasi...{% else %}Pilih satu atau beberapa lokasi...{% endif %}',
         allowClear: true,
         width: '100%',
         tags: true,
-        closeOnSelect: false,
+        closeOnSelect: {% if is_edit %}true{% else %}false{% endif %},
         createTag: function(params) {
           const term = $.trim(params.term);
           if (term === '') return null;
@@ -236,7 +312,6 @@
       $lokasi.on('select2:select', function(e) {
         const data = e.params.data;
         if (data.id && data.id.toString().startsWith('_new_')) {
-          const csrfToken = document.querySelector('form [name=csrfmiddlewaretoken]')?.value;
           $.ajax({
             url: '{% url "ajax_create_lokasi" %}',
             method: 'POST',
@@ -256,6 +331,32 @@
     }
   }
 
-  $(initMaintenanceRequestFormSelect2);
+  function initMateriRows() {
+    const rows = document.getElementById('materiRows');
+    const template = document.getElementById('materiRowTemplate');
+    const addButton = document.getElementById('addMateriRow');
+    if (!rows || !template || !addButton) return;
+
+    addButton.addEventListener('click', function() {
+      rows.appendChild(template.content.firstElementChild.cloneNode(true));
+      rows.lastElementChild.querySelector('input[name="materi_names[]"]').focus();
+    });
+
+    rows.addEventListener('click', function(event) {
+      const removeButton = event.target.closest('.remove-materi-row');
+      if (!removeButton) return;
+      const currentRows = rows.querySelectorAll('.materi-row');
+      if (currentRows.length <= 1) {
+        currentRows[0].querySelector('input[name="materi_names[]"]').value = '';
+        return;
+      }
+      removeButton.closest('.materi-row').remove();
+    });
+  }
+
+  $(function() {
+    initMaintenanceRequestFormSelect2();
+    initMateriRows();
+  });
 </script>
 {% endblock %}

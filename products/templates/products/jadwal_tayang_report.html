@@ -72,7 +72,8 @@
             <thead>
                 <tr>
                     <th style="width:60px">#</th>
-                    <th>Brand / Materi</th>
+                    <th>Brand</th>
+                    <th>Materi</th>
                     <th>Jenis Produk</th>
                     <th>Tayang</th>
                     <th>Takeout</th>
@@ -87,8 +88,18 @@
                 <tr>
                     <td class="text-muted">{{ req.id }}</td>
                     <td>
-                        <div class="fw-semibold">{{ req.brand_materi|default:"-" }}</div>
+                        <div class="fw-semibold">{{ req.brand|default:"-" }}</div>
                         <div class="text-muted small">{{ req.submitted_by.get_full_name|default:req.submitted_by.username }}</div>
+                    </td>
+                    <td>
+                        {% for materi in req.materi_items.all %}
+                        <div class="{% if not forloop.last %}mb-1{% endif %}">
+                            <span class="badge text-bg-secondary">{{ materi.nama_materi }}</span>
+                            <span class="badge text-bg-{{ materi.status_badge_class }}">{{ materi.get_status_display }}</span>
+                        </div>
+                        {% empty %}
+                        <span class="text-muted small">Belum ada materi</span>
+                        {% endfor %}
                     </td>
                     <td>
                         {% if req.jenis_led %}
@@ -108,7 +119,7 @@
                         {% endfor %}
                     </td>
                     <td>
-                        <span class="badge text-bg-success">Sedang Tayang</span>
+                        <span class="badge text-bg-{{ req.status_badge_class }}">{{ req.get_status_display }}</span>
                     </td>
                     <td class="text-center">
                         <a href="{% url 'jadwal_tayang_detail' req.id %}" class="btn btn-sm btn-info" title="View Detail">

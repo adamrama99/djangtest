@@ -3,14 +3,6 @@
 
 {% block extra_css %}
 <style>
-    .form-section-title {
-        border-bottom: 2px solid #198754;
-        padding-bottom: 5px;
-        margin-bottom: 15px;
-        color: #198754;
-        font-weight: bold;
-    }
-
     .choice-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -40,6 +32,13 @@
     .field-container {
         margin-bottom: 25px;
     }
+
+    .materi-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+        align-items: start;
+    }
 </style>
 {% endblock %}
 
@@ -64,9 +63,16 @@
                 </h3>
             </div>
 
-            <form method="post" enctype="multipart/form-data" novalidate>
+            <form method="post" novalidate>
                 {% csrf_token %}
                 <div class="card-body">
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger">
+                        {% for error in form.non_field_errors %}
+                        <div>{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
 
                     <div class="row">
                         <div class="col-md-6 mb-3">
@@ -103,12 +109,12 @@
 
                     <div class="row">
                         <div class="col-lg-6 mb-3">
-                            <label for="{{ form.brand_materi.id_for_label }}" class="form-label fw-bold">
-                                Brand / Materi <span class="text-danger">*</span>
+                            <label for="{{ form.brand.id_for_label }}" class="form-label fw-bold">
+                                Brand <span class="text-danger">*</span>
                             </label>
-                            {{ form.brand_materi }}
-                            {% if form.brand_materi.errors %}
-                            <div class="text-danger small mt-1">{% for error in form.brand_materi.errors %}{{ error }}{% endfor %}</div>
+                            {{ form.brand }}
+                            {% if form.brand.errors %}
+                            <div class="text-danger small mt-1">{% for error in form.brand.errors %}{{ error }}{% endfor %}</div>
                             {% endif %}
                         </div>
 
@@ -134,7 +140,29 @@
 
                     <hr class="my-4 opacity-25">
 
-                    <!-- Jenis Produk -->
+                    <div class="field-container">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="form-label fw-bold mb-0">Materi <span class="text-danger">*</span></label>
+                            <button type="button" class="btn btn-sm btn-outline-success" id="addMateriRow">
+                                <i class="bi bi-plus-lg me-1"></i>Tambah Materi
+                            </button>
+                        </div>
+                        <div id="materiRows" class="d-flex flex-column gap-2">
+                            {% for row in materi_rows %}
+                            <div class="materi-row">
+                                <input type="hidden" name="materi_ids[]" value="{{ row.id }}">
+                                <input type="text" name="materi_names[]" value="{{ row.nama_materi }}" class="form-control" placeholder="Nama materi" required>
+                                <button type="button" class="btn btn-outline-danger remove-materi-row" title="Hapus materi">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <div class="form-text">Isi satu atau beberapa materi. Foto executor nanti diupload per materi.</div>
+                    </div>
+
+                    <hr class="my-4 opacity-25">
+
                     <div class="field-container">
                         <label class="form-label fw-bold mb-2">Jenis Produk <span class="text-danger">*</span></label>
                         <div class="choice-grid">
@@ -158,56 +186,9 @@
                         <label for="{{ form.note_requester.id_for_label }}" class="form-label fw-bold">Note Requester</label>
                         {{ form.note_requester }}
                         {% if form.note_requester.errors %}
-                        <div class="text-danger small mt-1">{% for error in form.note_requester.errors %}{{ error }}{% endfor %}
-                        </div>
+                        <div class="text-danger small mt-1">{% for error in form.note_requester.errors %}{{ error }}{% endfor %}</div>
                         {% endif %}
                     </div>
-
-                    <div class="row">
-                        <div class="col-lg-6 mb-3">
-                            <label for="{{ form.foto_referensi_requester.id_for_label }}" class="form-label fw-bold">
-                                Foto Referensi Requester
-                            </label>
-                            {{ form.foto_referensi_requester }}
-                            {% if form.foto_referensi_requester.help_text %}
-                            <div class="form-text">{{ form.foto_referensi_requester.help_text }}</div>
-                            {% endif %}
-                            {% if form.foto_referensi_requester.errors %}
-                            <div class="text-danger small mt-1">
-                                {% for error in form.foto_referensi_requester.errors %}{{ error }}{% endfor %}
-                            </div>
-                            {% endif %}
-                            {% if is_edit and jadwal_tayang.foto_referensi_requester %}
-                            <div class="mt-2">
-                                <a href="{{ jadwal_tayang.foto_referensi_requester.url }}" target="_blank" class="btn btn-sm btn-outline-info">
-                                    <i class="bi bi-image me-1"></i>Lihat Foto Saat Ini
-                                </a>
-                            </div>
-                            {% endif %}
-                        </div>
-                        <div class="col-lg-6 mb-3">
-                            <label for="{{ form.link_foto_drive_requester.id_for_label }}" class="form-label fw-bold">
-                                Link Foto Google Drive
-                            </label>
-                            {{ form.link_foto_drive_requester }}
-                            {% if form.link_foto_drive_requester.help_text %}
-                            <div class="form-text">{{ form.link_foto_drive_requester.help_text }}</div>
-                            {% endif %}
-                            {% if form.link_foto_drive_requester.errors %}
-                            <div class="text-danger small mt-1">
-                                {% for error in form.link_foto_drive_requester.errors %}{{ error }}{% endfor %}
-                            </div>
-                            {% endif %}
-                            {% if is_edit and jadwal_tayang.link_foto_drive_requester %}
-                            <div class="mt-2">
-                                <a href="{{ jadwal_tayang.link_foto_drive_requester }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary">
-                                    <i class="bi bi-box-arrow-up-right me-1"></i>Buka Link Saat Ini
-                                </a>
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
-
                 </div>
 
                 <div class="card-footer bg-transparent border-top d-flex gap-2">
@@ -220,60 +201,93 @@
                     </a>
                 </div>
             </form>
-
         </div>
     </div>
 </div>
+
+<template id="materiRowTemplate">
+    <div class="materi-row">
+        <input type="hidden" name="materi_ids[]" value="">
+        <input type="text" name="materi_names[]" class="form-control" placeholder="Nama materi" required>
+        <button type="button" class="btn btn-outline-danger remove-materi-row" title="Hapus materi">
+            <i class="bi bi-trash"></i>
+        </button>
+    </div>
+</template>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+  function createTaggedSelect($el, options) {
+    $el.select2({
+      theme: 'bootstrap-5',
+      placeholder: options.placeholder,
+      allowClear: true,
+      width: '100%',
+      tags: true,
+      closeOnSelect: options.closeOnSelect,
+      createTag: function(params) {
+        const term = $.trim(params.term);
+        if (term === '') return null;
+        return { id: '_new_' + term, text: term, newTag: true };
+      },
+      templateResult: function(data) {
+        if (data.newTag) {
+          return $('<span><i class="bi bi-plus-circle me-1 text-success"></i>Tambah: <strong>' + data.text + '</strong></span>');
+        }
+        return data.text;
+      },
+    });
+  }
+
+  function replaceTemporaryOption($el, tempId, resp) {
+    $el.find('option[value="' + tempId + '"]').remove();
+    $el.append(new Option(resp.name, resp.id, true, true)).trigger('change');
+  }
+
   function initJadwalTayangFormSelect2() {
-    const $brand = $('#id_brand_materi');
+    const csrfToken = document.querySelector('form [name=csrfmiddlewaretoken]')?.value;
+    const $brand = $('#id_brand');
     if ($brand.length) {
-      $brand.select2({
-        theme: 'bootstrap-5',
-        placeholder: 'Pilih Brand / Materi...',
-        allowClear: true,
-        width: '100%',
+      createTaggedSelect($brand, {
+        placeholder: 'Pilih Brand...',
+        closeOnSelect: true,
+      });
+
+      $brand.on('select2:select', function(e) {
+        const data = e.params.data;
+        if (data.id && data.id.toString().startsWith('_new_')) {
+          $.ajax({
+            url: '{% url "ajax_create_brand" %}',
+            method: 'POST',
+            data: { name: data.text, csrfmiddlewaretoken: csrfToken },
+            success: function(resp) {
+              if (resp.success) replaceTemporaryOption($brand, data.id, resp);
+            },
+            error: function() {
+              alert('Gagal menambahkan brand baru.');
+            }
+          });
+        }
       });
     }
 
     const $lokasi = $('#id_lokasi');
     if ($lokasi.length) {
-      $lokasi.select2({
-        theme: 'bootstrap-5',
+      createTaggedSelect($lokasi, {
         placeholder: '{% if is_edit %}Pilih lokasi...{% else %}Pilih satu atau beberapa lokasi...{% endif %}',
-        allowClear: true,
-        width: '100%',
-        tags: true,
         closeOnSelect: {% if is_edit %}true{% else %}false{% endif %},
-        createTag: function(params) {
-          const term = $.trim(params.term);
-          if (term === '') return null;
-          return { id: '_new_' + term, text: term, newTag: true };
-        },
-        templateResult: function(data) {
-          if (data.newTag) {
-            return $('<span><i class="bi bi-plus-circle me-1 text-success"></i>Tambah: <strong>' + data.text + '</strong></span>');
-          }
-          return data.text;
-        },
       });
 
       $lokasi.on('select2:select', function(e) {
         const data = e.params.data;
         if (data.id && data.id.toString().startsWith('_new_')) {
-          const csrfToken = document.querySelector('form [name=csrfmiddlewaretoken]')?.value;
           $.ajax({
             url: '{% url "ajax_create_lokasi" %}',
             method: 'POST',
             data: { name: data.text, csrfmiddlewaretoken: csrfToken },
             success: function(resp) {
-              if (resp.success) {
-                $lokasi.find('option[value="' + data.id + '"]').remove();
-                $lokasi.append(new Option(resp.name, resp.id, true, true)).trigger('change');
-              }
+              if (resp.success) replaceTemporaryOption($lokasi, data.id, resp);
             },
             error: function() {
               alert('Gagal menambahkan lokasi baru.');
@@ -284,6 +298,32 @@
     }
   }
 
-  $(initJadwalTayangFormSelect2);
+  function initMateriRows() {
+    const rows = document.getElementById('materiRows');
+    const template = document.getElementById('materiRowTemplate');
+    const addButton = document.getElementById('addMateriRow');
+    if (!rows || !template || !addButton) return;
+
+    addButton.addEventListener('click', function() {
+      rows.appendChild(template.content.firstElementChild.cloneNode(true));
+      rows.lastElementChild.querySelector('input[name="materi_names[]"]').focus();
+    });
+
+    rows.addEventListener('click', function(event) {
+      const removeButton = event.target.closest('.remove-materi-row');
+      if (!removeButton) return;
+      const currentRows = rows.querySelectorAll('.materi-row');
+      if (currentRows.length <= 1) {
+        currentRows[0].querySelector('input[name="materi_names[]"]').value = '';
+        return;
+      }
+      removeButton.closest('.materi-row').remove();
+    });
+  }
+
+  $(function() {
+    initJadwalTayangFormSelect2();
+    initMateriRows();
+  });
 </script>
 {% endblock %}

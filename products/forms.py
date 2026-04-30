@@ -23,7 +23,7 @@ class DocumentationRequestForm(forms.ModelForm):
     class Meta:
         model = DocumentationRequest
         fields = [
-            "brand_materi",
+            "brand",
             "lokasi",
             "jenis_led",
             "tanggal",
@@ -34,7 +34,7 @@ class DocumentationRequestForm(forms.ModelForm):
             "pic_pemohon",
         ]
         widgets = {
-            "brand_materi": forms.Select(attrs={"class": "form-select select2-field"}),
+            "brand": forms.Select(attrs={"class": "form-select select2-field"}),
             "lokasi": forms.SelectMultiple(attrs={"class": "form-select select2-field select2-tags", "multiple": "multiple"}),
             "jenis_led": forms.RadioSelect(attrs={"class": "form-check-input"}),
             "tanggal": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
@@ -47,12 +47,32 @@ class DocumentationRequestForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["brand_materi"].queryset = self.fields["brand_materi"].queryset.order_by("name")
+        self.fields["brand"].queryset = self.fields["brand"].queryset.order_by("name")
         self.fields["lokasi"].queryset = self.fields["lokasi"].queryset.order_by("name")
         self.fields["jenis_led"].queryset = self.fields["jenis_led"].queryset.order_by("name")
         self.fields["requirements"].queryset = self.fields["requirements"].queryset.order_by("name")
         self.fields["view_photo"].queryset = self.fields["view_photo"].queryset.order_by("name")
         self.fields["jenis_kamera"].queryset = self.fields["jenis_kamera"].queryset.order_by("name")
+
+
+class DocumentationRequestEditForm(DocumentationRequestForm):
+    lokasi = forms.ModelChoiceField(
+        queryset=Lokasi.objects.none(),
+        widget=forms.Select(attrs={"class": "form-select select2-field select2-tags"}),
+        label="Lokasi",
+    )
+
+    class Meta(DocumentationRequestForm.Meta):
+        widgets = {
+            **DocumentationRequestForm.Meta.widgets,
+            "lokasi": forms.Select(attrs={"class": "form-select select2-field select2-tags"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["lokasi"].queryset = Lokasi.objects.order_by("name")
+        if self.instance and self.instance.pk:
+            self.initial["lokasi"] = self.instance.lokasi.order_by("name").first()
 
 
 class MaintenanceRequestForm(forms.ModelForm):
@@ -63,7 +83,7 @@ class MaintenanceRequestForm(forms.ModelForm):
             "departement",
             "tanggal_permintaan",
             "tanggal_deadline",
-            "brand_materi",
+            "brand",
             "lokasi",
             "jenis_led",
             "deskripsi_pekerjaan",
@@ -74,7 +94,7 @@ class MaintenanceRequestForm(forms.ModelForm):
             "departement": forms.TextInput(attrs={"class": "form-control", "placeholder": "Departement pemohon"}),
             "tanggal_permintaan": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
             "tanggal_deadline": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
-            "brand_materi": forms.Select(attrs={"class": "form-select select2-field"}),
+            "brand": forms.Select(attrs={"class": "form-select select2-field"}),
             "lokasi": forms.SelectMultiple(attrs={"class": "form-select select2-field select2-tags", "multiple": "multiple"}),
             "jenis_led": forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
             "deskripsi_pekerjaan": forms.Textarea(attrs={"class": "form-control", "rows": 4, "placeholder": "Jelaskan detail pekerjaan maintenance / troubleshoot..."}),
@@ -83,16 +103,36 @@ class MaintenanceRequestForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["brand_materi"].queryset = self.fields["brand_materi"].queryset.order_by("name")
+        self.fields["brand"].queryset = self.fields["brand"].queryset.order_by("name")
         self.fields["lokasi"].queryset = self.fields["lokasi"].queryset.order_by("name")
         self.fields["jenis_led"].queryset = self.fields["jenis_led"].queryset.order_by("name")
-        self.fields["brand_materi"].required = True
+        self.fields["brand"].required = True
         self.fields["lokasi"].required = True
         self.fields["jenis_led"].label = "Jenis Produk"
         self.fields["foto_kerusakan"].required = False
 
     def clean_foto_kerusakan(self):
         return _validate_image_size(self.cleaned_data.get("foto_kerusakan"))
+
+
+class MaintenanceRequestEditForm(MaintenanceRequestForm):
+    lokasi = forms.ModelChoiceField(
+        queryset=Lokasi.objects.none(),
+        widget=forms.Select(attrs={"class": "form-select select2-field select2-tags"}),
+        label="Lokasi",
+    )
+
+    class Meta(MaintenanceRequestForm.Meta):
+        widgets = {
+            **MaintenanceRequestForm.Meta.widgets,
+            "lokasi": forms.Select(attrs={"class": "form-select select2-field select2-tags"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["lokasi"].queryset = Lokasi.objects.order_by("name")
+        if self.instance and self.instance.pk:
+            self.initial["lokasi"] = self.instance.lokasi.order_by("name").first()
 
 
 class DocumentationRequestProofForm(forms.ModelForm):
@@ -146,31 +186,27 @@ class JadwalTayangForm(forms.ModelForm):
     class Meta:
         model = JadwalTayang
         fields = [
-            "brand_materi",
+            "brand",
             "lokasi",
             "jenis_led",
             "tanggal_tayang",
             "tanggal_takeout",
             "note_requester",
-            "foto_referensi_requester",
-            "link_foto_drive_requester",
             "pic_pemohon",
         ]
         widgets = {
-            "brand_materi": forms.Select(attrs={"class": "form-select select2-field"}),
+            "brand": forms.Select(attrs={"class": "form-select select2-field"}),
             "lokasi": forms.SelectMultiple(attrs={"class": "form-select select2-field select2-tags", "multiple": "multiple"}),
             "jenis_led": forms.RadioSelect(attrs={"class": "form-check-input"}),
             "tanggal_tayang": forms.DateTimeInput(attrs={"class": "form-control", "type": "datetime-local"}),
             "tanggal_takeout": forms.DateTimeInput(attrs={"class": "form-control", "type": "datetime-local"}),
             "note_requester": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "Catatan dari pemohon..."}),
-            "foto_referensi_requester": forms.ClearableFileInput(attrs={"class": "form-control", "accept": "image/*"}),
-            "link_foto_drive_requester": forms.URLInput(attrs={"class": "form-control", "placeholder": "https://drive.google.com/..."}),
             "pic_pemohon": forms.TextInput(attrs={"class": "form-control", "placeholder": "Nama / Divisi Pemohon"}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["brand_materi"].queryset = self.fields["brand_materi"].queryset.order_by("name")
+        self.fields["brand"].queryset = self.fields["brand"].queryset.order_by("name")
         self.fields["lokasi"].queryset = self.fields["lokasi"].queryset.order_by("name")
         self.fields["jenis_led"].queryset = self.fields["jenis_led"].queryset.order_by("name")
         for field_name in ("tanggal_tayang", "tanggal_takeout"):
@@ -180,12 +216,6 @@ class JadwalTayangForm(forms.ModelForm):
                 value = getattr(self.instance, field_name, None)
                 if value:
                     self.initial[field_name] = timezone.localtime(value).strftime("%Y-%m-%dT%H:%M")
-        self.fields["foto_referensi_requester"].required = False
-        self.fields["link_foto_drive_requester"].required = False
-        self.fields["link_foto_drive_requester"].help_text = "Opsional. Isi link share Google Drive atau link referensi foto lainnya."
-
-    def clean_foto_referensi_requester(self):
-        return _validate_image_size(self.cleaned_data.get("foto_referensi_requester"))
 
 
 class JadwalTayangEditForm(JadwalTayangForm):

@@ -30,6 +30,7 @@ urlpatterns = [
 
     # AJAX helper
     path("api/lokasi/create/", views.ajax_create_lokasi, name="ajax_create_lokasi"),
+    path("api/brand/create/", views.ajax_create_brand, name="ajax_create_brand"),
 
     # Takeout Alert Rules
     path("notifications/rules/", views.takeout_alert_rule_list, name="takeout_alert_rule_list"),

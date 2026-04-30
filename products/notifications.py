@@ -1,10 +1,9 @@
 from datetime import timedelta
 
-from django.db.models import Exists, OuterRef
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import JadwalTayang, JadwalTayangFotoTakeout, TakeoutAlertRule
+from .models import JadwalTayang, JadwalTayangMateri, TakeoutAlertRule
 
 
 def _format_datetime(value):
@@ -60,10 +59,21 @@ def _format_takeout_message(now, target, rule):
 
 
 def _jadwal_label(jadwal_tayang):
-    brand = jadwal_tayang.brand_materi.name if jadwal_tayang.brand_materi else "N/A"
+    brand = jadwal_tayang.brand.name if jadwal_tayang.brand else "N/A"
     lokasi_names = sorted(lokasi.name for lokasi in jadwal_tayang.lokasi.all())
     lokasi_label = ", ".join(lokasi_names) if lokasi_names else "-"
     return brand, lokasi_label, f"{brand} - {lokasi_label}"
+
+
+def _format_pending_materi(names, limit=3):
+    if not names:
+        return "-"
+    shown = names[:limit]
+    label = ", ".join(shown)
+    remaining = len(names) - len(shown)
+    if remaining:
+        label = f"{label}, +{remaining} lainnya"
+    return label
 
 
 def get_active_takeout_notifications(limit=None):
@@ -72,18 +82,36 @@ def get_active_takeout_notifications(limit=None):
         return []
 
     now = timezone.now()
-    takeout_exists = JadwalTayangFotoTakeout.objects.filter(jadwal_tayang_id=OuterRef("pk"))
     jadwal_list = (
-        JadwalTayang.objects.select_related("brand_materi")
-        .prefetch_related("lokasi")
-        .annotate(has_takeout=Exists(takeout_exists))
-        .filter(has_takeout=False)
+        JadwalTayang.objects.select_related("brand")
+        .prefetch_related(
+            "lokasi",
+            "materi_items__foto_tayang_set",
+            "materi_items__foto_takeout_set",
+            "materi_items__bukti_playlist",
+        )
+        .filter(materi_items__isnull=False)
+        .distinct()
     )
 
     notifications = []
     for jadwal_tayang in jadwal_list:
+        materi_items = list(jadwal_tayang.materi_items.all())
+        pending_materi_names = [
+            materi.nama_materi
+            for materi in materi_items
+            if materi.calculate_status() != JadwalTayangMateri.Status.SUDAH_TAKEOUT
+        ]
+        if not pending_materi_names:
+            continue
+
         brand, lokasi_label, jadwal_label = _jadwal_label(jadwal_tayang)
         time_status = _format_relative_time(now, jadwal_tayang.tanggal_takeout)
+        total_materi = len(materi_items)
+        pending_materi_count = len(pending_materi_names)
+        completed_materi_count = total_materi - pending_materi_count
+        pending_materi_label = _format_pending_materi(pending_materi_names)
+        progress_label = f"{completed_materi_count}/{total_materi} materi takeout"
 
         for rule in rules:
             if rule.trigger_direction == TakeoutAlertRule.TriggerDirection.AFTER:
@@ -112,10 +140,20 @@ def get_active_takeout_notifications(limit=None):
                     "urgency": rule.urgency,
                     "urgency_label": urgency_label,
                     "urgency_class": "danger" if is_urgent else "warning",
-                    "title": f"{urgency_label}: {brand  }",
-                    "message": f"Takeout {jadwal_label}. {takeout_message}",
+                    "title": f"{urgency_label}: {brand}",
+                    "message": (
+                        f"Takeout {jadwal_label}. "
+                        f"Belum takeout: {pending_materi_label}. "
+                        f"{takeout_message}"
+                    ),
                     "jadwal_label": jadwal_label,
                     "lokasi_label": lokasi_label,
+                    "pending_materi_names": pending_materi_names,
+                    "pending_materi_label": pending_materi_label,
+                    "pending_materi_count": pending_materi_count,
+                    "total_materi": total_materi,
+                    "completed_materi_count": completed_materi_count,
+                    "progress_label": progress_label,
                     "takeout_at": jadwal_tayang.tanggal_takeout,
                     "takeout_at_display": _format_datetime(jadwal_tayang.tanggal_takeout),
                     "triggered_at_display": _format_datetime(trigger_at),

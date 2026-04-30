@@ -5,12 +5,12 @@
 <style>
     .photo-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
         gap: 12px;
     }
     .photo-grid img {
         width: 100%;
-        height: 180px;
+        height: 150px;
         object-fit: cover;
         border-radius: 8px;
         cursor: pointer;
@@ -25,12 +25,9 @@
         grid-template-columns: repeat(3, 1fr);
         gap: 12px;
     }
-    .playlist-grid .playlist-item {
-        text-align: center;
-    }
     .playlist-grid img {
         width: 100%;
-        height: 200px;
+        height: 150px;
         object-fit: cover;
         border-radius: 8px;
         border: 2px solid rgba(255,255,255,.1);
@@ -46,12 +43,8 @@
         font-weight: 600;
         margin-bottom: 16px;
     }
-    .request-reference-thumb {
-        max-width: 100%;
-        max-height: 220px;
-        object-fit: cover;
-        border-radius: 8px;
-        border: 1px solid rgba(0, 0, 0, .08);
+    .materi-section + .materi-section {
+        margin-top: 1rem;
     }
 </style>
 {% endblock %}
@@ -75,8 +68,7 @@
 </div>
 
 <div class="row g-3">
-    <!-- Details Card -->
-    <div class="col-lg-6">
+    <div class="col-lg-5">
         <div class="card card-success card-outline h-100">
             <div class="card-header bg-transparent">
                 <h5 class="card-title mb-0"><i class="bi bi-info-circle me-2"></i>Detail Request</h5>
@@ -84,8 +76,8 @@
             <div class="card-body">
                 <div class="row">
                     <div class="col-6">
-                        <div class="detail-label">Brand / Materi</div>
-                        <div class="detail-value">{{ jt.brand_materi|default:"-" }}</div>
+                        <div class="detail-label">Brand</div>
+                        <div class="detail-value">{{ jt.brand|default:"-" }}</div>
                     </div>
                     <div class="col-6">
                         <div class="detail-label">Jenis Produk</div>
@@ -120,13 +112,7 @@
                     <div class="col-6">
                         <div class="detail-label">Status</div>
                         <div class="detail-value">
-                            {% if jt.status == "BELUM_TAYANG" %}
-                            <span class="badge text-bg-secondary">Belum Tayang</span>
-                            {% elif jt.status == "SEDANG_TAYANG" %}
-                            <span class="badge text-bg-info">Sedang Tayang</span>
-                            {% elif jt.status == "SUDAH_TAKEOUT" %}
-                            <span class="badge text-bg-success">Sudah Takeout</span>
-                            {% endif %}
+                            <span class="badge text-bg-{{ jt.status_badge_class }}">{{ jt.get_status_display }}</span>
                         </div>
                     </div>
                     <div class="col-6">
@@ -142,30 +128,29 @@
                 </div>
 
                 <hr class="opacity-25">
+                <div class="detail-label">Materi</div>
+                <div class="detail-value">
+                    {% for materi in jt.materi_items.all %}
+                    <span class="badge text-bg-secondary">{{ materi.nama_materi }}</span>
+                    {% empty %}
+                    -
+                    {% endfor %}
+                </div>
+
+                <div class="detail-label">Status Materi</div>
+                <div class="detail-value">
+                    {% for materi in jt.materi_items.all %}
+                    <div class="{% if not forloop.last %}mb-1{% endif %}">
+                        Status {{ materi.nama_materi }}:
+                        <span class="badge text-bg-{{ materi.status_badge_class }}">{{ materi.get_status_display }}</span>
+                    </div>
+                    {% empty %}
+                    -
+                    {% endfor %}
+                </div>
+
                 <div class="detail-label">Notes Requester</div>
                 <div class="detail-value">{{ jt.note_requester|default:"-"|linebreaksbr }}</div>
-
-                <div class="detail-label">Foto Referensi Requester</div>
-                <div class="detail-value">
-                    {% if jt.foto_referensi_requester %}
-                    <a href="{{ jt.foto_referensi_requester.url }}" target="_blank">
-                        <img src="{{ jt.foto_referensi_requester.url }}" alt="Foto Referensi Requester" class="request-reference-thumb">
-                    </a>
-                    {% else %}
-                    -
-                    {% endif %}
-                </div>
-
-                <div class="detail-label">Link Foto Google Drive</div>
-                <div class="detail-value">
-                    {% if jt.link_foto_drive_requester %}
-                    <a href="{{ jt.link_foto_drive_requester }}" target="_blank" rel="noopener noreferrer">
-                        {{ jt.link_foto_drive_requester }}
-                    </a>
-                    {% else %}
-                    -
-                    {% endif %}
-                </div>
 
                 <div class="detail-label">Notes Executor</div>
                 <div class="detail-value">{{ jt.note_executor|default:"-"|linebreaksbr }}</div>
@@ -173,97 +158,99 @@
         </div>
     </div>
 
-    <!-- Photos Section -->
-    <div class="col-lg-6">
-        <!-- Foto Tayang -->
-        <div class="card mb-3">
+    <div class="col-lg-7">
+        {% for materi in jt.materi_items.all %}
+        <div class="card materi-section">
             <div class="card-header bg-transparent">
-                <h5 class="card-title mb-0"><i class="bi bi-image me-2 text-success"></i>Foto Tayang</h5>
+                <div class="d-flex justify-content-between align-items-center gap-2">
+                    <h5 class="card-title mb-0"><i class="bi bi-card-text me-2 text-success"></i>{{ materi.nama_materi }}</h5>
+                    <span class="badge text-bg-{{ materi.status_badge_class }}">{{ materi.get_status_display }}</span>
+                </div>
             </div>
             <div class="card-body">
-                {% if jt.foto_tayang_set.all %}
-                <div class="photo-grid">
-                    {% for foto in jt.foto_tayang_set.all %}
-                    <a href="{{ foto.foto.url }}" target="_blank">
-                        <img src="{{ foto.foto.url }}" alt="Foto Tayang {{ forloop.counter }}">
-                    </a>
-                    {% endfor %}
+                <div class="mb-4">
+                    <div class="detail-label">Foto Tayang</div>
+                    {% if materi.foto_tayang_set.all %}
+                    <div class="photo-grid">
+                        {% for foto in materi.foto_tayang_set.all %}
+                        <a href="{{ foto.foto.url }}" target="_blank">
+                            <img src="{{ foto.foto.url }}" alt="Foto Tayang {{ materi.nama_materi }} {{ forloop.counter }}">
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Belum ada foto tayang.</p>
+                    {% endif %}
                 </div>
-                {% else %}
-                <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Belum ada foto tayang.</p>
-                {% endif %}
-            </div>
-        </div>
 
-        <!-- Bukti Playlist -->
-        <div class="card mb-3">
-            <div class="card-header bg-transparent">
-                <h5 class="card-title mb-0"><i class="bi bi-collection-play me-2 text-primary"></i>Bukti Playlist <i class="text-muted small">(hanya bisa satu per waktu, upload ulang untuk mereplace foto)</i></h5>
-            </div>
-            <div class="card-body">
-                {% if bukti_playlist %}
-                <div class="playlist-grid">
-                    <div class="playlist-item">
-                        <div class="detail-label mb-2">Pagi</div>
-                        {% if bukti_playlist.foto_pagi %}
-                        <a href="{{ bukti_playlist.foto_pagi.url }}" target="_blank">
-                            <img src="{{ bukti_playlist.foto_pagi.url }}" alt="Playlist Pagi">
-                        </a>
-                        {% else %}
-                        <div class="text-muted small">Belum diupload</div>
-                        {% endif %}
+                <div class="mb-4">
+                    <div class="detail-label">Bukti Playlist</div>
+                    {% if materi.bukti_playlist %}
+                    <div class="playlist-grid">
+                        <div>
+                            <div class="detail-label mb-2">Pagi</div>
+                            {% if materi.bukti_playlist.foto_pagi %}
+                            <a href="{{ materi.bukti_playlist.foto_pagi.url }}" target="_blank">
+                                <img src="{{ materi.bukti_playlist.foto_pagi.url }}" alt="Playlist Pagi">
+                            </a>
+                            {% else %}
+                            <div class="text-muted small">Belum diupload</div>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <div class="detail-label mb-2">Siang</div>
+                            {% if materi.bukti_playlist.foto_siang %}
+                            <a href="{{ materi.bukti_playlist.foto_siang.url }}" target="_blank">
+                                <img src="{{ materi.bukti_playlist.foto_siang.url }}" alt="Playlist Siang">
+                            </a>
+                            {% else %}
+                            <div class="text-muted small">Belum diupload</div>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <div class="detail-label mb-2">Malam</div>
+                            {% if materi.bukti_playlist.foto_malam %}
+                            <a href="{{ materi.bukti_playlist.foto_malam.url }}" target="_blank">
+                                <img src="{{ materi.bukti_playlist.foto_malam.url }}" alt="Playlist Malam">
+                            </a>
+                            {% else %}
+                            <div class="text-muted small">Belum diupload</div>
+                            {% endif %}
+                        </div>
                     </div>
-                    <div class="playlist-item">
-                        <div class="detail-label mb-2">Siang</div>
-                        {% if bukti_playlist.foto_siang %}
-                        <a href="{{ bukti_playlist.foto_siang.url }}" target="_blank">
-                            <img src="{{ bukti_playlist.foto_siang.url }}" alt="Playlist Siang">
-                        </a>
-                        {% else %}
-                        <div class="text-muted small">Belum diupload</div>
-                        {% endif %}
-                    </div>
-                    <div class="playlist-item">
-                        <div class="detail-label mb-2">Malam</div>
-                        {% if bukti_playlist.foto_malam %}
-                        <a href="{{ bukti_playlist.foto_malam.url }}" target="_blank">
-                            <img src="{{ bukti_playlist.foto_malam.url }}" alt="Playlist Malam">
-                        </a>
-                        {% else %}
-                        <div class="text-muted small">Belum diupload</div>
-                        {% endif %}
-                    </div>
+                    {% else %}
+                    <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Belum ada bukti playlist.</p>
+                    {% endif %}
                 </div>
-                {% else %}
-                <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Belum ada bukti playlist.</p>
-                {% endif %}
-            </div>
-        </div>
 
-        <!-- Foto Takeout -->
-        <div class="card mb-3">
-            <div class="card-header bg-transparent">
-                <h5 class="card-title mb-0"><i class="bi bi-box-arrow-up me-2 text-danger"></i>Foto Sudah Takeout</h5>
-            </div>
-            <div class="card-body">
-                {% if jt.foto_takeout_set.all %}
-                <div class="photo-grid">
-                    {% for foto in jt.foto_takeout_set.all %}
-                    <a href="{{ foto.foto.url }}" target="_blank">
-                        <img src="{{ foto.foto.url }}" alt="Foto Takeout {{ forloop.counter }}">
-                    </a>
-                    {% endfor %}
+                <div>
+                    <div class="detail-label">Foto Takeout</div>
+                    {% if materi.foto_takeout_set.all %}
+                    <div class="photo-grid">
+                        {% for foto in materi.foto_takeout_set.all %}
+                        <a href="{{ foto.foto.url }}" target="_blank">
+                            <img src="{{ foto.foto.url }}" alt="Foto Takeout {{ materi.nama_materi }} {{ forloop.counter }}">
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Belum ada foto takeout.</p>
+                    {% endif %}
                 </div>
-                {% else %}
-                <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Belum ada foto takeout.</p>
-                {% endif %}
             </div>
         </div>
+        {% empty %}
+        <div class="card">
+            <div class="card-body text-muted text-center py-5">
+                <i class="bi bi-inbox display-6 d-block mb-2"></i>
+                Belum ada materi.
+            </div>
+        </div>
+        {% endfor %}
     </div>
 </div>
 
 {% if is_executor or is_admin %}
-<!-- Upload Photos Form (Executor / Admin) -->
 <div class="card card-warning card-outline mt-3">
     <div class="card-header bg-transparent">
         <h5 class="card-title mb-0"><i class="bi bi-cloud-upload me-2 text-warning"></i>Upload Foto & Notes Executor</h5>
@@ -271,43 +258,43 @@
     <form method="post" action="{% url 'jadwal_tayang_upload_photos' jt.id %}" enctype="multipart/form-data">
         {% csrf_token %}
         <div class="card-body">
-            <div class="row g-3">
-                <!-- Note Executor -->
-                <div class="col-12">
-                    <label class="form-label fw-bold">Notes Executor</label>
-                    <textarea name="note_executor" class="form-control" rows="3" placeholder="Catatan dari executor...">{{ jt.note_executor }}</textarea>
-                </div>
+            <div class="mb-4">
+                <label class="form-label fw-bold">Notes Executor</label>
+                <textarea name="note_executor" class="form-control" rows="3" placeholder="Catatan dari executor...">{{ jt.note_executor }}</textarea>
+            </div>
 
-                <hr class="opacity-25">
-
-                <!-- Foto Tayang -->
-                <div class="col-md-6">
-                    <label class="form-label fw-bold">Foto Tayang <span class="text-muted fw-normal">(bisa pilih banyak)</span></label>
-                    <input type="file" name="foto_tayang" class="form-control" accept="image/*" multiple>
+            {% for materi in jt.materi_items.all %}
+            <div class="border rounded p-3 mb-3">
+                <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
+                    <h6 class="fw-bold mb-0">{{ materi.nama_materi }}</h6>
+                    <span class="badge text-bg-{{ materi.status_badge_class }}">{{ materi.get_status_display }}</span>
                 </div>
-
-                <!-- Foto Takeout -->
-                <div class="col-md-6">
-                    <label class="form-label fw-bold">Foto Sudah Takeout <span class="text-muted fw-normal">(bisa pilih banyak)</span></label>
-                    <input type="file" name="foto_takeout" class="form-control" accept="image/*" multiple>
-                </div>
-
-                <hr class="opacity-25">
-
-                <!-- Bukti Playlist -->
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">Bukti Playlist Pagi</label>
-                    <input type="file" name="foto_playlist_pagi" class="form-control" accept="image/*">
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">Bukti Playlist Siang</label>
-                    <input type="file" name="foto_playlist_siang" class="form-control" accept="image/*">
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">Bukti Playlist Malam</label>
-                    <input type="file" name="foto_playlist_malam" class="form-control" accept="image/*">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Foto Tayang <span class="text-muted fw-normal">(bisa pilih banyak)</span></label>
+                        <input type="file" name="foto_tayang_{{ materi.id }}" class="form-control" accept="image/*" multiple>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Foto Takeout <span class="text-muted fw-normal">(bisa pilih banyak)</span></label>
+                        <input type="file" name="foto_takeout_{{ materi.id }}" class="form-control" accept="image/*" multiple>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Bukti Playlist Pagi</label>
+                        <input type="file" name="foto_playlist_pagi_{{ materi.id }}" class="form-control" accept="image/*">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Bukti Playlist Siang</label>
+                        <input type="file" name="foto_playlist_siang_{{ materi.id }}" class="form-control" accept="image/*">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Bukti Playlist Malam</label>
+                        <input type="file" name="foto_playlist_malam_{{ materi.id }}" class="form-control" accept="image/*">
+                    </div>
                 </div>
             </div>
+            {% empty %}
+            <p class="text-muted small mb-0">Belum ada materi untuk upload foto.</p>
+            {% endfor %}
         </div>
         <div class="card-footer bg-transparent border-top">
             <button type="submit" class="btn btn-warning px-4">

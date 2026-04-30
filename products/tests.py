@@ -14,10 +14,13 @@ from .models import (
     BrandMateri,
     DocumentationRequest,
     DocumentationRequestLokasiAssignment,
+    DocumentationRequestMateri,
     Dokumentator,
     EditHistory,
     MaintenanceRequest,
+    MaintenanceRequestMateri,
     JadwalTayang,
+    JadwalTayangMateri,
     JadwalTayangBuktiPlaylist,
     JadwalTayangFotoTayang,
     JadwalTayangFotoTakeout,
@@ -58,7 +61,8 @@ class DocumentationRequestMultiLokasiTests(TestCase):
 
     def get_form_data(self, **overrides):
         data = {
-            "brand_materi": str(self.brand.id),
+            "brand": str(self.brand.id),
+            "materi_names[]": ["Materi Test"],
             "lokasi": [str(self.lokasi_a.id)],
             "jenis_led": str(self.led_type.id),
             "tanggal": date.today().isoformat(),
@@ -74,7 +78,7 @@ class DocumentationRequestMultiLokasiTests(TestCase):
     def create_doc_request(self):
         doc_request = DocumentationRequest.objects.create(
             submitted_by=self.user,
-            brand_materi=self.brand,
+            brand=self.brand,
             jenis_led=self.led_type,
             tanggal=date.today(),
             note="Catatan test",
@@ -84,6 +88,11 @@ class DocumentationRequestMultiLokasiTests(TestCase):
         doc_request.requirements.set([self.requirement])
         doc_request.view_photo.set([self.view_photo])
         doc_request.jenis_kamera.set([self.camera_type])
+        DocumentationRequestMateri.objects.create(
+            documentation_request=doc_request,
+            nama_materi="Materi Test",
+            sort_order=0,
+        )
         return doc_request
 
     def test_form_valid_with_multiple_selected_locations(self):
@@ -102,6 +111,7 @@ class DocumentationRequestMultiLokasiTests(TestCase):
             reverse("doc_request_create"),
             data=self.get_form_data(
                 lokasi=[str(self.lokasi_a.id), str(self.lokasi_b.id)],
+                **{"materi_names[]": ["Materi A", "Materi B"]},
             ),
         )
 
@@ -116,6 +126,37 @@ class DocumentationRequestMultiLokasiTests(TestCase):
         for doc_request in created_requests:
             self.assertEqual(doc_request.lokasi.count(), 1)
             self.assertEqual(doc_request.lokasi_assignments.count(), 1)
+            self.assertEqual(doc_request.materi_display(), "Materi A, Materi B")
+
+    def test_maintenance_create_splits_locations_and_copies_materi(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("maint_request_create"),
+            data={
+                "nama_pemohon": "Pemohon Maintenance",
+                "departement": "IT",
+                "tanggal_permintaan": date.today().isoformat(),
+                "tanggal_deadline": (date.today() + timedelta(days=2)).isoformat(),
+                "brand": str(self.brand.id),
+                "lokasi": [str(self.lokasi_a.id), str(self.lokasi_b.id)],
+                "materi_names[]": ["Panel A", "Panel B"],
+                "jenis_led": [str(self.led_type.id)],
+                "deskripsi_pekerjaan": "Cek panel per lokasi",
+            },
+        )
+
+        created_requests = list(MaintenanceRequest.objects.order_by("id"))
+
+        self.assertRedirects(response, reverse("maint_request_list"))
+        self.assertEqual(len(created_requests), 2)
+        self.assertEqual(
+            sorted(maint_request.lokasi_display() for maint_request in created_requests),
+            ["Lokasi A", "Lokasi B"],
+        )
+        for maint_request in created_requests:
+            self.assertEqual(maint_request.lokasi.count(), 1)
+            self.assertEqual(maint_request.materi_display(), "Panel A, Panel B")
 
     def test_dashboard_list_and_detail_pages_render_with_multi_lokasi(self):
         doc_request = self.create_doc_request()
@@ -233,7 +274,7 @@ class RequestCreationPermissionTests(TestCase):
 
         cls.doc_request = DocumentationRequest.objects.create(
             submitted_by=cls.requester,
-            brand_materi=cls.brand,
+            brand=cls.brand,
             jenis_led=cls.led_type,
             tanggal=date.today(),
             note="Catatan untuk executor",
@@ -243,12 +284,17 @@ class RequestCreationPermissionTests(TestCase):
         cls.doc_request.requirements.set([cls.requirement])
         cls.doc_request.view_photo.set([cls.view_photo])
         cls.doc_request.jenis_kamera.set([cls.camera_type])
+        DocumentationRequestMateri.objects.create(
+            documentation_request=cls.doc_request,
+            nama_materi="Materi Executor Access",
+            sort_order=0,
+        )
         cls.doc_assignment = cls.doc_request.lokasi_assignments.get(lokasi=cls.lokasi)
         cls.doc_assignment.pelaksana.set([cls.executor_dokumentator])
 
         cls.doc_request_other = DocumentationRequest.objects.create(
             submitted_by=cls.requester,
-            brand_materi=cls.brand_other,
+            brand=cls.brand_other,
             jenis_led=cls.led_type,
             tanggal=date.today(),
             note="Catatan tersembunyi",
@@ -258,6 +304,11 @@ class RequestCreationPermissionTests(TestCase):
         cls.doc_request_other.requirements.set([cls.requirement])
         cls.doc_request_other.view_photo.set([cls.view_photo])
         cls.doc_request_other.jenis_kamera.set([cls.camera_type])
+        DocumentationRequestMateri.objects.create(
+            documentation_request=cls.doc_request_other,
+            nama_materi="Materi Hidden Executor",
+            sort_order=0,
+        )
         cls.doc_assignment_other = cls.doc_request_other.lokasi_assignments.get(lokasi=cls.lokasi_other)
         cls.doc_assignment_other.pelaksana.set([cls.dokumentator_other])
 
@@ -267,10 +318,17 @@ class RequestCreationPermissionTests(TestCase):
             departement="IT Support",
             tanggal_permintaan=date.today(),
             tanggal_deadline=date.today() + timedelta(days=1),
+            brand=cls.brand,
             deskripsi_pekerjaan="Maintenance untuk akses executor",
         )
+        cls.maint_request.lokasi.set([cls.lokasi])
         cls.maint_request.jenis_led.set([cls.maint_led_type])
         cls.maint_request.pelaksana.set([cls.executor_dokumentator])
+        MaintenanceRequestMateri.objects.create(
+            maintenance_request=cls.maint_request,
+            nama_materi="Materi Maintenance Executor",
+            sort_order=0,
+        )
 
         cls.maint_request_other = MaintenanceRequest.objects.create(
             submitted_by=cls.requester,
@@ -278,14 +336,21 @@ class RequestCreationPermissionTests(TestCase):
             departement="Finance Hidden",
             tanggal_permintaan=date.today(),
             tanggal_deadline=date.today() + timedelta(days=2),
+            brand=cls.brand_other,
             deskripsi_pekerjaan="Maintenance tersembunyi",
         )
+        cls.maint_request_other.lokasi.set([cls.lokasi_other])
         cls.maint_request_other.jenis_led.set([cls.maint_led_type_other])
         cls.maint_request_other.pelaksana.set([cls.dokumentator_other])
+        MaintenanceRequestMateri.objects.create(
+            maintenance_request=cls.maint_request_other,
+            nama_materi="Materi Maintenance Hidden",
+            sort_order=0,
+        )
 
         cls.jadwal_tayang = JadwalTayang.objects.create(
             submitted_by=cls.requester,
-            brand_materi=cls.brand,
+            brand=cls.brand,
             jenis_led=cls.led_type,
             tanggal_tayang=timezone.now(),
             tanggal_takeout=timezone.now() + timedelta(hours=4),
@@ -293,6 +358,11 @@ class RequestCreationPermissionTests(TestCase):
             pic_pemohon="PIC Jadwal Executor",
         )
         cls.jadwal_tayang.lokasi.set([cls.lokasi])
+        JadwalTayangMateri.objects.create(
+            jadwal_tayang=cls.jadwal_tayang,
+            nama_materi="Materi Executor",
+            sort_order=0,
+        )
 
     def _upload_image(self, name="proof.gif"):
         tiny_gif = (
@@ -422,8 +492,10 @@ class RequestCreationPermissionTests(TestCase):
         doc_response = self.client.post(
             reverse("doc_request_edit", args=[self.doc_request.pk]),
             data={
-                "brand_materi": str(self.brand_other.id),
-                "lokasi": [str(self.lokasi_other.id)],
+                "brand": str(self.brand_other.id),
+                "materi_ids[]": [str(self.doc_request.materi_items.first().id)],
+                "materi_names[]": ["Materi Updated"],
+                "lokasi": str(self.lokasi_other.id),
                 "jenis_led": str(self.led_type.id),
                 "tanggal": date.today().isoformat(),
                 "requirements": [str(self.requirement.id)],
@@ -440,8 +512,10 @@ class RequestCreationPermissionTests(TestCase):
                 "departement": "IT Updated",
                 "tanggal_permintaan": date.today().isoformat(),
                 "tanggal_deadline": (date.today() + timedelta(days=3)).isoformat(),
-                "brand_materi": str(self.brand_other.id),
-                "lokasi": [str(self.lokasi_other.id)],
+                "brand": str(self.brand_other.id),
+                "materi_ids[]": [str(self.maint_request.materi_items.first().id)],
+                "materi_names[]": ["Materi Maintenance Updated"],
+                "lokasi": str(self.lokasi_other.id),
                 "jenis_led": [str(self.maint_led_type_other.id)],
                 "deskripsi_pekerjaan": "Maintenance updated requester",
             },
@@ -459,15 +533,17 @@ class RequestCreationPermissionTests(TestCase):
 
         self.assertRedirects(doc_response, reverse("doc_request_detail", args=[self.doc_request.pk]))
         self.assertRedirects(maint_response, reverse("maint_request_detail", args=[self.maint_request.pk]))
-        self.assertEqual(self.doc_request.brand_materi, self.brand_other)
+        self.assertEqual(self.doc_request.brand, self.brand_other)
         self.assertEqual(self.doc_request.lokasi_display(), self.lokasi_other.name)
+        self.assertEqual(self.doc_request.materi_display(), "Materi Updated")
         self.assertEqual(self.doc_request.note, "Catatan requester update")
         self.assertEqual(self.doc_request.pic_pemohon, "PIC Updated")
-        self.assertTrue({"Brand / Materi", "Lokasi", "PIC Pemohon", "Note"}.issubset(doc_history_fields))
+        self.assertTrue({"Brand", "Lokasi", "Materi", "PIC Pemohon", "Note"}.issubset(doc_history_fields))
         self.assertEqual(self.maint_request.nama_pemohon, "Pemohon Updated")
         self.assertEqual(self.maint_request.departement, "IT Updated")
-        self.assertEqual(self.maint_request.brand_materi, self.brand_other)
+        self.assertEqual(self.maint_request.brand, self.brand_other)
         self.assertEqual(self.maint_request.lokasi_display(), self.lokasi_other.name)
+        self.assertEqual(self.maint_request.materi_display(), "Materi Maintenance Updated")
         self.assertQuerySetEqual(
             self.maint_request.jenis_led.order_by("name").values_list("name", flat=True),
             ["Panel Hidden Executor"],
@@ -480,8 +556,10 @@ class RequestCreationPermissionTests(TestCase):
         doc_response = self.client.post(
             reverse("doc_request_edit", args=[self.doc_request.pk]),
             data={
-                "brand_materi": str(self.brand.id),
-                "lokasi": [str(self.lokasi.id)],
+                "brand": str(self.brand.id),
+                "materi_ids[]": [str(self.doc_request.materi_items.first().id)],
+                "materi_names[]": ["Materi Staff"],
+                "lokasi": str(self.lokasi.id),
                 "jenis_led": str(self.led_type.id),
                 "tanggal": date.today().isoformat(),
                 "requirements": [str(self.requirement.id)],
@@ -498,8 +576,10 @@ class RequestCreationPermissionTests(TestCase):
                 "departement": "Departement Staff",
                 "tanggal_permintaan": date.today().isoformat(),
                 "tanggal_deadline": (date.today() + timedelta(days=4)).isoformat(),
-                "brand_materi": str(self.brand.id),
-                "lokasi": [str(self.lokasi.id)],
+                "brand": str(self.brand.id),
+                "materi_ids[]": [str(self.maint_request.materi_items.first().id)],
+                "materi_names[]": ["Materi Maintenance Staff"],
+                "lokasi": str(self.lokasi.id),
                 "jenis_led": [str(self.maint_led_type.id)],
                 "deskripsi_pekerjaan": "Maintenance updated staff",
             },
@@ -582,53 +662,97 @@ class RequestCreationPermissionTests(TestCase):
 
     def test_executor_can_upload_doc_request_proof_and_status_becomes_done(self):
         self.client.force_login(self.executor)
+        materi = self.doc_request.materi_items.first()
 
         response = self.client.post(
             reverse("doc_request_detail", args=[self.doc_request.pk]),
-            {"foto_bukti_kerja": self._upload_image("doc-proof.gif")},
+            {f"foto_bukti_kerja_{materi.id}": self._upload_image("doc-proof.gif")},
         )
 
         self.doc_request.refresh_from_db()
+        materi.refresh_from_db()
 
         self.assertRedirects(response, reverse("doc_request_detail", args=[self.doc_request.pk]))
-        self.assertTrue(bool(self.doc_request.foto_bukti_kerja))
+        self.assertTrue(bool(materi.foto_bukti_kerja))
         self.assertEqual(self.doc_request.status, "DONE")
 
     def test_executor_can_upload_maintenance_proof_and_status_becomes_done(self):
         self.client.force_login(self.executor)
+        materi = self.maint_request.materi_items.first()
 
         response = self.client.post(
             reverse("maint_request_detail", args=[self.maint_request.pk]),
-            {"foto_bukti_kerja": self._upload_image("maint-proof.gif")},
+            {f"foto_bukti_kerja_{materi.id}": self._upload_image("maint-proof.gif")},
         )
 
         self.maint_request.refresh_from_db()
+        materi.refresh_from_db()
 
         self.assertRedirects(response, reverse("maint_request_detail", args=[self.maint_request.pk]))
-        self.assertTrue(bool(self.maint_request.foto_bukti_kerja))
+        self.assertTrue(bool(materi.foto_bukti_kerja))
         self.assertEqual(self.maint_request.status, "DONE")
 
     def test_staff_can_upload_doc_and_maintenance_proof(self):
         self.client.force_login(self.staff)
+        doc_materi = self.doc_request_other.materi_items.first()
+        maint_materi = self.maint_request_other.materi_items.first()
 
         doc_response = self.client.post(
             reverse("doc_request_detail", args=[self.doc_request_other.pk]),
-            {"foto_bukti_kerja": self._upload_image("doc-proof-staff.gif")},
+            {f"foto_bukti_kerja_{doc_materi.id}": self._upload_image("doc-proof-staff.gif")},
         )
         maint_response = self.client.post(
             reverse("maint_request_detail", args=[self.maint_request_other.pk]),
-            {"foto_bukti_kerja": self._upload_image("maint-proof-staff.gif")},
+            {f"foto_bukti_kerja_{maint_materi.id}": self._upload_image("maint-proof-staff.gif")},
         )
 
         self.doc_request_other.refresh_from_db()
         self.maint_request_other.refresh_from_db()
+        doc_materi.refresh_from_db()
+        maint_materi.refresh_from_db()
 
         self.assertRedirects(doc_response, reverse("doc_request_detail", args=[self.doc_request_other.pk]))
         self.assertRedirects(maint_response, reverse("maint_request_detail", args=[self.maint_request_other.pk]))
-        self.assertTrue(bool(self.doc_request_other.foto_bukti_kerja))
-        self.assertTrue(bool(self.maint_request_other.foto_bukti_kerja))
+        self.assertTrue(bool(doc_materi.foto_bukti_kerja))
+        self.assertTrue(bool(maint_materi.foto_bukti_kerja))
         self.assertEqual(self.doc_request_other.status, "DONE")
         self.assertEqual(self.maint_request_other.status, "DONE")
+
+    def test_partial_materi_proof_sets_status_in_progress(self):
+        extra_doc_materi = DocumentationRequestMateri.objects.create(
+            documentation_request=self.doc_request,
+            nama_materi="Materi Tambahan",
+            sort_order=1,
+        )
+        extra_maint_materi = MaintenanceRequestMateri.objects.create(
+            maintenance_request=self.maint_request,
+            nama_materi="Materi Maintenance Tambahan",
+            sort_order=1,
+        )
+        doc_materi = self.doc_request.materi_items.exclude(pk=extra_doc_materi.pk).first()
+        maint_materi = self.maint_request.materi_items.exclude(pk=extra_maint_materi.pk).first()
+        self.client.force_login(self.executor)
+
+        doc_response = self.client.post(
+            reverse("doc_request_detail", args=[self.doc_request.pk]),
+            {f"foto_bukti_kerja_{doc_materi.id}": self._upload_image("partial-doc-proof.gif")},
+        )
+        maint_response = self.client.post(
+            reverse("maint_request_detail", args=[self.maint_request.pk]),
+            {f"foto_bukti_kerja_{maint_materi.id}": self._upload_image("partial-maint-proof.gif")},
+        )
+
+        self.doc_request.refresh_from_db()
+        self.maint_request.refresh_from_db()
+        extra_doc_materi.refresh_from_db()
+        extra_maint_materi.refresh_from_db()
+
+        self.assertRedirects(doc_response, reverse("doc_request_detail", args=[self.doc_request.pk]))
+        self.assertRedirects(maint_response, reverse("maint_request_detail", args=[self.maint_request.pk]))
+        self.assertEqual(self.doc_request.status, "IN_PROGRESS")
+        self.assertEqual(self.maint_request.status, "IN_PROGRESS")
+        self.assertFalse(bool(extra_doc_materi.foto_bukti_kerja))
+        self.assertFalse(bool(extra_maint_materi.foto_bukti_kerja))
 
     def test_executor_users_are_synced_into_dokumentator_dropdown(self):
         extra_executor = get_user_model().objects.create_user(
@@ -697,7 +821,7 @@ class JadwalTayangHistoryTests(TestCase):
         start_at = timezone.now()
         jadwal_tayang = JadwalTayang.objects.create(
             submitted_by=self.admin,
-            brand_materi=self.brand,
+            brand=self.brand,
             jenis_led=self.led_type,
             tanggal_tayang=start_at,
             tanggal_takeout=start_at + timedelta(hours=6),
@@ -705,6 +829,11 @@ class JadwalTayangHistoryTests(TestCase):
             pic_pemohon="Marketing",
         )
         jadwal_tayang.lokasi.set([self.lokasi_a])
+        JadwalTayangMateri.objects.create(
+            jadwal_tayang=jadwal_tayang,
+            nama_materi="Materi 1",
+            sort_order=0,
+        )
         return jadwal_tayang
 
     def test_create_view_logs_history_for_each_created_location(self):
@@ -714,8 +843,9 @@ class JadwalTayangHistoryTests(TestCase):
         response = self.client.post(
             reverse("jadwal_tayang_create"),
             data={
-                "brand_materi": str(self.brand.id),
+                "brand": str(self.brand.id),
                 "lokasi": [str(self.lokasi_a.id), str(self.lokasi_b.id)],
+                "materi_names[]": ["Materi A", "Materi B"],
                 "jenis_led": str(self.led_type.id),
                 "tanggal_tayang": self._datetime_input(start_at),
                 "tanggal_takeout": self._datetime_input(start_at + timedelta(hours=6)),
@@ -735,8 +865,8 @@ class JadwalTayangHistoryTests(TestCase):
         self.assertEqual(
             list(history_entries.values_list("new_value", flat=True)),
             [
-                "Jadwal tayang baru dibuat untuk lokasi Lokasi JT A",
-                "Jadwal tayang baru dibuat untuk lokasi Lokasi JT B",
+                "Jadwal tayang baru dibuat untuk lokasi Lokasi JT A dengan materi: Materi A, Materi B",
+                "Jadwal tayang baru dibuat untuk lokasi Lokasi JT B dengan materi: Materi A, Materi B",
             ],
         )
 
@@ -747,22 +877,20 @@ class JadwalTayangHistoryTests(TestCase):
                 reverse("jadwal_tayang_detail", args=[history_entry.doc_request_id]),
             )
 
-    def test_create_view_saves_requester_reference_photo_and_link_for_each_created_location(self):
+    def test_create_view_copies_materi_for_each_created_location(self):
         self.client.force_login(self.admin)
         start_at = timezone.now()
-        drive_link = "https://drive.google.com/file/d/requester-photo/view"
 
         response = self.client.post(
             reverse("jadwal_tayang_create"),
             data={
-                "brand_materi": str(self.brand.id),
+                "brand": str(self.brand.id),
                 "lokasi": [str(self.lokasi_a.id), str(self.lokasi_b.id)],
+                "materi_names[]": ["Materi A", "Materi B"],
                 "jenis_led": str(self.led_type.id),
                 "tanggal_tayang": self._datetime_input(start_at),
                 "tanggal_takeout": self._datetime_input(start_at + timedelta(hours=6)),
                 "note_requester": "Catatan requester",
-                "foto_referensi_requester": self._upload_file("requester-reference.jpg"),
-                "link_foto_drive_requester": drive_link,
                 "pic_pemohon": "Marketing",
             },
         )
@@ -772,8 +900,11 @@ class JadwalTayangHistoryTests(TestCase):
         self.assertRedirects(response, reverse("jadwal_tayang_list"))
         self.assertEqual(created_requests.count(), 2)
         for request_obj in created_requests:
-            self.assertTrue(bool(request_obj.foto_referensi_requester))
-            self.assertEqual(request_obj.link_foto_drive_requester, drive_link)
+            self.assertQuerySetEqual(
+                request_obj.materi_items.order_by("sort_order").values_list("nama_materi", flat=True),
+                ["Materi A", "Materi B"],
+                transform=lambda value: value,
+            )
 
     def test_status_and_pelaksana_updates_are_logged(self):
         jadwal_tayang = self.create_jadwal_tayang()
@@ -812,15 +943,16 @@ class JadwalTayangHistoryTests(TestCase):
 
     def test_upload_view_logs_note_files_and_auto_status(self):
         jadwal_tayang = self.create_jadwal_tayang()
+        materi = jadwal_tayang.materi_items.first()
         self.client.force_login(self.admin)
 
         response = self.client.post(
             reverse("jadwal_tayang_upload_photos", args=[jadwal_tayang.pk]),
             data={
                 "note_executor": "Catatan executor",
-                "foto_tayang": self._upload_file("tayang.jpg"),
-                "foto_playlist_pagi": self._upload_file("playlist.jpg"),
-                "foto_takeout": self._upload_file("takeout.jpg"),
+                f"foto_tayang_{materi.id}": self._upload_file("tayang.jpg"),
+                f"foto_playlist_pagi_{materi.id}": self._upload_file("playlist.jpg"),
+                f"foto_takeout_{materi.id}": self._upload_file("takeout.jpg"),
             },
         )
 
@@ -835,7 +967,15 @@ class JadwalTayangHistoryTests(TestCase):
         self.assertRedirects(response, reverse("jadwal_tayang_detail", args=[jadwal_tayang.pk]))
         self.assertSetEqual(
             field_names,
-            {"Pelaksana", "Notes Executor", "Foto Tayang", "Bukti Playlist", "Foto Takeout", "Status"},
+            {
+                "Pelaksana",
+                "Notes Executor",
+                "Foto Tayang (Materi 1)",
+                "Bukti Playlist (Materi 1)",
+                "Foto Takeout (Materi 1)",
+                "Status Materi (Materi 1)",
+                "Status",
+            },
         )
         self.assertQuerySetEqual(
             jadwal_tayang.pelaksana.order_by("name").values_list("name", flat=True),
@@ -844,6 +984,47 @@ class JadwalTayangHistoryTests(TestCase):
         )
         self.assertEqual(status_history.old_value, "Belum Tayang")
         self.assertEqual(status_history.new_value, "Sudah Takeout")
+
+    def test_parent_status_follows_least_progressed_materi(self):
+        jadwal_tayang = self.create_jadwal_tayang()
+        materi_a = jadwal_tayang.materi_items.first()
+        materi_b = JadwalTayangMateri.objects.create(
+            jadwal_tayang=jadwal_tayang,
+            nama_materi="Materi 2",
+            sort_order=1,
+        )
+
+        JadwalTayangFotoTayang.objects.create(
+            materi=materi_b,
+            foto=self._upload_file("tayang-materi-2.jpg"),
+        )
+        materi_b.auto_update_status()
+        jadwal_tayang.auto_update_status()
+        materi_a.refresh_from_db()
+        materi_b.refresh_from_db()
+        jadwal_tayang.refresh_from_db()
+
+        self.assertEqual(materi_a.status, JadwalTayangMateri.Status.BELUM_TAYANG)
+        self.assertEqual(materi_b.status, JadwalTayangMateri.Status.SEDANG_TAYANG)
+        self.assertEqual(jadwal_tayang.status, "BELUM_TAYANG")
+
+        JadwalTayangFotoTakeout.objects.create(
+            materi=materi_a,
+            foto=self._upload_file("takeout-materi-1.jpg"),
+        )
+        materi_a.auto_update_status()
+        jadwal_tayang.auto_update_status()
+        jadwal_tayang.refresh_from_db()
+        self.assertEqual(jadwal_tayang.status, "SEDANG_TAYANG")
+
+        JadwalTayangFotoTakeout.objects.create(
+            materi=materi_b,
+            foto=self._upload_file("takeout-materi-2.jpg"),
+        )
+        materi_b.auto_update_status()
+        jadwal_tayang.auto_update_status()
+        jadwal_tayang.refresh_from_db()
+        self.assertEqual(jadwal_tayang.status, "SUDAH_TAKEOUT")
 
     def test_delete_logs_history(self):
         jadwal_tayang = self.create_jadwal_tayang()
@@ -865,19 +1046,19 @@ class JadwalTayangHistoryTests(TestCase):
         jadwal_tayang = self.create_jadwal_tayang()
         self.client.force_login(self.admin)
         new_start_at = timezone.now() + timedelta(days=1)
-        drive_link = "https://drive.google.com/file/d/updated-requester-photo/view"
+        materi = jadwal_tayang.materi_items.first()
 
         response = self.client.post(
             reverse("jadwal_tayang_edit", args=[jadwal_tayang.pk]),
             data={
-                "brand_materi": str(self.brand_b.id),
+                "brand": str(self.brand_b.id),
                 "lokasi": str(self.lokasi_b.id),
+                "materi_ids[]": [str(materi.id), ""],
+                "materi_names[]": ["Materi Updated", "Materi Baru"],
                 "jenis_led": str(self.led_type_b.id),
                 "tanggal_tayang": self._datetime_input(new_start_at),
                 "tanggal_takeout": self._datetime_input(new_start_at + timedelta(hours=8)),
                 "note_requester": "Catatan requester baru",
-                "foto_referensi_requester": self._upload_file("edited-requester-reference.jpg"),
-                "link_foto_drive_requester": drive_link,
                 "pic_pemohon": "Sales",
             },
         )
@@ -891,25 +1072,27 @@ class JadwalTayangHistoryTests(TestCase):
         field_names = set(history_entries.values_list("field_name", flat=True))
 
         self.assertRedirects(response, reverse("jadwal_tayang_detail", args=[jadwal_tayang.pk]))
-        self.assertEqual(jadwal_tayang.brand_materi, self.brand_b)
+        self.assertEqual(jadwal_tayang.brand, self.brand_b)
         self.assertEqual(jadwal_tayang.jenis_led, self.led_type_b)
         self.assertEqual(jadwal_tayang.lokasi_display(), "Lokasi JT B")
         self.assertEqual(jadwal_tayang.pic_pemohon, "Sales")
         self.assertEqual(jadwal_tayang.note_requester, "Catatan requester baru")
-        self.assertTrue(bool(jadwal_tayang.foto_referensi_requester))
-        self.assertEqual(jadwal_tayang.link_foto_drive_requester, drive_link)
+        self.assertQuerySetEqual(
+            jadwal_tayang.materi_items.order_by("sort_order").values_list("nama_materi", flat=True),
+            ["Materi Updated", "Materi Baru"],
+            transform=lambda value: value,
+        )
         self.assertSetEqual(
             field_names,
             {
-                "Brand / Materi",
+                "Brand",
                 "Lokasi",
+                "Materi",
                 "Jenis Produk",
                 "Tanggal Tayang",
                 "Tanggal Takeout",
                 "PIC Pemohon",
                 "Notes Requester",
-                "Foto Referensi Requester",
-                "Link Foto Google Drive",
             },
         )
 
@@ -921,20 +1104,14 @@ class JadwalTayangHistoryTests(TestCase):
 
         self.assertEqual(response.status_code, 403)
 
-    def test_detail_page_shows_requester_reference_photo_and_drive_link(self):
+    def test_detail_page_shows_materi(self):
         jadwal_tayang = self.create_jadwal_tayang()
-        jadwal_tayang.foto_referensi_requester = self._upload_file("detail-requester-reference.jpg")
-        jadwal_tayang.link_foto_drive_requester = "https://drive.google.com/file/d/detail-requester-reference/view"
-        jadwal_tayang.save()
         self.client.force_login(self.admin)
 
         response = self.client.get(reverse("jadwal_tayang_detail", args=[jadwal_tayang.pk]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Foto Referensi Requester")
-        self.assertContains(response, "Link Foto Google Drive")
-        self.assertContains(response, jadwal_tayang.link_foto_drive_requester)
-        self.assertContains(response, jadwal_tayang.foto_referensi_requester.url)
+        self.assertContains(response, "Materi 1")
 
 
 @override_settings(ALLOWED_HOSTS=["testserver", "localhost"])
@@ -957,7 +1134,7 @@ class JadwalTayangVisibilityTests(TestCase):
         start_at = timezone.now()
         jadwal_tayang = JadwalTayang.objects.create(
             submitted_by=self.owner,
-            brand_materi=self.brand,
+            brand=self.brand,
             jenis_led=self.led_type,
             tanggal_tayang=start_at,
             tanggal_takeout=start_at + timedelta(hours=6),
@@ -965,6 +1142,11 @@ class JadwalTayangVisibilityTests(TestCase):
             pic_pemohon="Marketing",
         )
         jadwal_tayang.lokasi.set([self.lokasi])
+        JadwalTayangMateri.objects.create(
+            jadwal_tayang=jadwal_tayang,
+            nama_materi="Materi Visibility",
+            sort_order=0,
+        )
         return jadwal_tayang
 
     def test_logged_in_user_can_view_other_users_jadwal_tayang_list_and_detail(self):
@@ -1030,7 +1212,7 @@ class JadwalTayangListPhotoStatusTests(TestCase):
     def create_jadwal_tayang(self, *, brand, start_at, takeout_at):
         jadwal_tayang = JadwalTayang.objects.create(
             submitted_by=self.owner,
-            brand_materi=brand,
+            brand=brand,
             jenis_led=self.led_type,
             tanggal_tayang=start_at,
             tanggal_takeout=takeout_at,
@@ -1038,6 +1220,11 @@ class JadwalTayangListPhotoStatusTests(TestCase):
             pic_pemohon="Marketing",
         )
         jadwal_tayang.lokasi.set([self.lokasi])
+        JadwalTayangMateri.objects.create(
+            jadwal_tayang=jadwal_tayang,
+            nama_materi="Materi Photo Status",
+            sort_order=0,
+        )
         return jadwal_tayang
 
     def test_list_uses_photo_based_status_labels(self):
@@ -1069,15 +1256,15 @@ class JadwalTayangListPhotoStatusTests(TestCase):
         )
 
         JadwalTayangFotoTayang.objects.create(
-            jadwal_tayang=foto_tayang,
+            materi=foto_tayang.materi_items.first(),
             foto=self._upload_file("tayang.jpg"),
         )
         JadwalTayangBuktiPlaylist.objects.create(
-            jadwal_tayang=playlist_only,
+            materi=playlist_only.materi_items.first(),
             foto_pagi=self._upload_file("playlist.jpg"),
         )
         JadwalTayangFotoTakeout.objects.create(
-            jadwal_tayang=takeout_done,
+            materi=takeout_done.materi_items.first(),
             foto=self._upload_file("takeout.jpg"),
         )
 
@@ -1085,15 +1272,14 @@ class JadwalTayangListPhotoStatusTests(TestCase):
         response = self.client.get(reverse("jadwal_tayang_list"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Status Foto")
+        self.assertContains(response, "Status")
         self.assertContains(response, "Brand No Photo")
         self.assertContains(response, "Brand Foto Tayang")
         self.assertContains(response, "Brand Playlist")
         self.assertContains(response, "Brand Overdue")
         self.assertContains(response, "Brand Takeout")
         self.assertContains(response, '<span class="badge text-bg-secondary">Belum Upload Foto</span>', html=True)
-        self.assertContains(response, '<span class="badge text-bg-info">Sudah Upload Foto Tayang</span>', html=True)
-        self.assertContains(response, '<span class="badge text-bg-info">Sudah Upload Bukti Playlist</span>', html=True)
+        self.assertContains(response, '<span class="badge text-bg-info">Upload Foto Parsial</span>', html=True)
         self.assertContains(response, '<span class="badge text-bg-danger">Belum Takeout</span>', html=True)
         self.assertContains(response, '<span class="badge text-bg-success">Sudah Upload Foto Takeout</span>', html=True)
 
@@ -1122,7 +1308,7 @@ class JadwalTayangReportTests(TestCase):
     def create_jadwal_tayang(self, *, brand, lokasi, start_at, takeout_at, status="BELUM_TAYANG"):
         jadwal_tayang = JadwalTayang.objects.create(
             submitted_by=self.owner,
-            brand_materi=brand,
+            brand=brand,
             jenis_led=self.led_type,
             tanggal_tayang=start_at,
             tanggal_takeout=takeout_at,
@@ -1132,6 +1318,11 @@ class JadwalTayangReportTests(TestCase):
         )
         jadwal_tayang.lokasi.set([lokasi])
         jadwal_tayang.pelaksana.set([self.dokumentator])
+        JadwalTayangMateri.objects.create(
+            jadwal_tayang=jadwal_tayang,
+            nama_materi=f"Materi {brand.name}",
+            sort_order=0,
+        )
         return jadwal_tayang
 
     def test_report_shows_only_currently_active_jadwal_grouped_by_location(self):
@@ -1353,7 +1544,7 @@ class ListSearchTests(TestCase):
 
         cls.doc_request_target = DocumentationRequest.objects.create(
             submitted_by=cls.user,
-            brand_materi=cls.brand_alpha,
+            brand=cls.brand_alpha,
             jenis_led=cls.led_type,
             tanggal=date.today(),
             note="Catatan alpha",
@@ -1363,10 +1554,15 @@ class ListSearchTests(TestCase):
         cls.doc_request_target.requirements.set([cls.requirement])
         cls.doc_request_target.view_photo.set([cls.view_photo])
         cls.doc_request_target.jenis_kamera.set([cls.camera_type])
+        DocumentationRequestMateri.objects.create(
+            documentation_request=cls.doc_request_target,
+            nama_materi="Materi Search Alpha",
+            sort_order=0,
+        )
 
         cls.doc_request_other = DocumentationRequest.objects.create(
             submitted_by=cls.admin,
-            brand_materi=cls.brand_beta,
+            brand=cls.brand_beta,
             jenis_led=cls.led_type,
             tanggal=date.today(),
             note="Catatan beta",
@@ -1376,6 +1572,11 @@ class ListSearchTests(TestCase):
         cls.doc_request_other.requirements.set([cls.requirement])
         cls.doc_request_other.view_photo.set([cls.view_photo])
         cls.doc_request_other.jenis_kamera.set([cls.camera_type])
+        DocumentationRequestMateri.objects.create(
+            documentation_request=cls.doc_request_other,
+            nama_materi="Materi Search Beta",
+            sort_order=0,
+        )
 
         cls.maint_request_target = MaintenanceRequest.objects.create(
             submitted_by=cls.user,
@@ -1383,10 +1584,17 @@ class ListSearchTests(TestCase):
             departement="Engineering Search",
             tanggal_permintaan=date.today(),
             tanggal_deadline=date.today() + timedelta(days=1),
+            brand=cls.brand_alpha,
             deskripsi_pekerjaan="Perbaikan panel target",
         )
+        cls.maint_request_target.lokasi.set([cls.lokasi_target])
         cls.maint_request_target.jenis_led.set([cls.maint_led_type_target])
         cls.maint_request_target.pelaksana.set([cls.dokumentator])
+        MaintenanceRequestMateri.objects.create(
+            maintenance_request=cls.maint_request_target,
+            nama_materi="Materi Maintenance Search Target",
+            sort_order=0,
+        )
 
         cls.maint_request_other = MaintenanceRequest.objects.create(
             submitted_by=cls.admin,
@@ -1394,14 +1602,21 @@ class ListSearchTests(TestCase):
             departement="Finance Other",
             tanggal_permintaan=date.today(),
             tanggal_deadline=date.today() + timedelta(days=2),
+            brand=cls.brand_beta,
             deskripsi_pekerjaan="Perbaikan panel other",
         )
+        cls.maint_request_other.lokasi.set([cls.lokasi_other])
         cls.maint_request_other.jenis_led.set([cls.maint_led_type_other])
+        MaintenanceRequestMateri.objects.create(
+            maintenance_request=cls.maint_request_other,
+            nama_materi="Materi Maintenance Search Other",
+            sort_order=0,
+        )
 
         start_at = timezone.now()
         cls.jadwal_target = JadwalTayang.objects.create(
             submitted_by=cls.admin,
-            brand_materi=cls.brand_alpha,
+            brand=cls.brand_alpha,
             jenis_led=cls.led_type,
             tanggal_tayang=start_at,
             tanggal_takeout=start_at + timedelta(minutes=30),
@@ -1410,10 +1625,15 @@ class ListSearchTests(TestCase):
         )
         cls.jadwal_target.lokasi.set([cls.lokasi_target])
         cls.jadwal_target.pelaksana.set([cls.dokumentator])
+        JadwalTayangMateri.objects.create(
+            jadwal_tayang=cls.jadwal_target,
+            nama_materi="Materi Search Target",
+            sort_order=0,
+        )
 
         cls.jadwal_other = JadwalTayang.objects.create(
             submitted_by=cls.user,
-            brand_materi=cls.brand_beta,
+            brand=cls.brand_beta,
             jenis_led=cls.led_type,
             tanggal_tayang=start_at,
             tanggal_takeout=start_at + timedelta(days=2),
@@ -1421,6 +1641,11 @@ class ListSearchTests(TestCase):
             pic_pemohon="PIC Other Jadwal",
         )
         cls.jadwal_other.lokasi.set([cls.lokasi_other])
+        JadwalTayangMateri.objects.create(
+            jadwal_tayang=cls.jadwal_other,
+            nama_materi="Materi Search Other",
+            sort_order=0,
+        )
 
         EditHistory.objects.create(
             user=cls.admin,
@@ -1578,7 +1803,7 @@ class TakeoutNotificationTests(TestCase):
         start_at = timezone.now() - timedelta(hours=2)
         jadwal_tayang = JadwalTayang.objects.create(
             submitted_by=self.admin,
-            brand_materi=self.brand,
+            brand=self.brand,
             jenis_led=self.led_type,
             tanggal_tayang=start_at,
             tanggal_takeout=timezone.now() + timedelta(hours=takeout_in_hours),
@@ -1586,6 +1811,11 @@ class TakeoutNotificationTests(TestCase):
             pic_pemohon="Marketing",
         )
         jadwal_tayang.lokasi.set([self.lokasi])
+        JadwalTayangMateri.objects.create(
+            jadwal_tayang=jadwal_tayang,
+            nama_materi="Materi Notification",
+            sort_order=0,
+        )
         return jadwal_tayang
 
     def test_notification_summary_returns_warning_and_urgent_notifications(self):
@@ -1619,7 +1849,7 @@ class TakeoutNotificationTests(TestCase):
     def test_notifications_disappear_after_takeout_photo_exists(self):
         jadwal_tayang = self.create_jadwal_tayang(takeout_in_hours=4)
         JadwalTayangFotoTakeout.objects.create(
-            jadwal_tayang=jadwal_tayang,
+            materi=jadwal_tayang.materi_items.first(),
             foto=self._upload_file("takeout-finished.jpg"),
         )
         self.client.force_login(self.user)
@@ -1630,6 +1860,34 @@ class TakeoutNotificationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(payload["count"], 0)
         self.assertEqual(payload["urgent_count"], 0)
+
+    def test_notifications_show_pending_materi_and_progress(self):
+        jadwal_tayang = self.create_jadwal_tayang(takeout_in_hours=4)
+        materi_a = jadwal_tayang.materi_items.first()
+        materi_a.nama_materi = "A52"
+        materi_a.save(update_fields=["nama_materi"])
+        JadwalTayangMateri.objects.create(
+            jadwal_tayang=jadwal_tayang,
+            nama_materi="S26",
+            sort_order=1,
+        )
+        JadwalTayangFotoTakeout.objects.create(
+            materi=materi_a,
+            foto=self._upload_file("a52-takeout.jpg"),
+        )
+        materi_a.auto_update_status()
+        jadwal_tayang.auto_update_status()
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("notification_summary"), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["count"], 2)
+        self.assertIn("Belum takeout: S26", payload["html"])
+        self.assertIn("1/2 materi takeout", payload["html"])
+        self.assertEqual(payload["urgent_notifications"][0]["pending_materi_label"], "S26")
+        self.assertEqual(payload["urgent_notifications"][0]["progress_label"], "1/2 materi takeout")
 
     def test_after_takeout_rule_only_appears_after_trigger_time(self):
         TakeoutAlertRule.objects.all().delete()

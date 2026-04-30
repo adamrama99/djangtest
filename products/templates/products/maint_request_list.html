@@ -31,7 +31,8 @@
                 <tr>
                     <th style="width:50px">#</th>
                     <th>Submitted</th>
-                    <th>Brand / Materi</th>
+                    <th>Brand</th>
+                    <th>Materi</th>
                     <th>Lokasi</th>
                     <th>Jenis Produk</th>
                     <th>Pemohon</th>
@@ -52,11 +53,18 @@
                     <td class="text-muted">{{ req.id }}</td>
                     <td class="text-muted small">{{ req.created_at|date:"d/m/Y H:i" }}</td>
                     <td>
-                        {% if req.brand_materi %}
-                        <div class="fw-semibold">{{ req.brand_materi.name }}</div>
+                        {% if req.brand %}
+                        <div class="fw-semibold">{{ req.brand.name }}</div>
                         {% else %}
                         -
                         {% endif %}
+                    </td>
+                    <td>
+                        {% for materi in req.materi_items.all %}
+                        <span class="badge text-bg-secondary">{{ materi.nama_materi }}</span>
+                        {% empty %}
+                        <span class="text-muted small">Belum ada materi</span>
+                        {% endfor %}
                     </td>
                     <td>{{ req.lokasi_display }}</td>
                     <td>
@@ -95,13 +103,18 @@
                         {% endif %}
                     </td>
                     <td>
-                        {% if req.foto_bukti_kerja %}
-                        <a href="{{ req.foto_bukti_kerja.url }}" target="_blank" class="text-decoration-none">
-                            <img src="{{ req.foto_bukti_kerja.url }}" alt="Bukti kerja" class="img-thumbnail" style="width:72px;height:72px;object-fit:cover;">
-                        </a>
-                        {% else %}
-                        <span class="text-muted small">Belum upload</span>
-                        {% endif %}
+                        {% for materi in req.materi_items.all %}
+                        <div class="{% if not forloop.last %}mb-1{% endif %}">
+                            <span class="badge text-bg-secondary">{{ materi.nama_materi }}</span>
+                            {% if materi.foto_bukti_kerja %}
+                            <span class="badge text-bg-success">Sudah Upload</span>
+                            {% else %}
+                            <span class="badge text-bg-light text-dark">Belum</span>
+                            {% endif %}
+                        </div>
+                        {% empty %}
+                        <span class="text-muted small">Belum ada materi</span>
+                        {% endfor %}
                     </td>
                     {% if can_manage_pelaksana %}
                     <td>
@@ -132,7 +145,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="{% if can_manage_pelaksana %}13{% else %}12{% endif %}" class="text-center text-muted py-5">
+                    <td colspan="{% if can_manage_pelaksana %}14{% else %}13{% endif %}" class="text-center text-muted py-5">
                         <i class="bi bi-inbox display-6 d-block mb-2"></i>
                         {% if search_active %}
                         Tidak ada maintenance request yang cocok dengan "{{ search_query }}". <a href="{% url 'maint_request_list' %}">Reset pencarian</a>.
