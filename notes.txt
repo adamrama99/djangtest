@@ -13,6 +13,7 @@ venv
 __pycache__
 
 untuk menerapkan update di website 
+cd var/www/djangtest
 pkill -f gunicorn
 /var/www/djangtest/venv/bin/python -m pip install -r requirements.txt
 /var/www/djangtest/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:8002 mysite.wsgi:application
