@@ -13,6 +13,8 @@ urlpatterns = [
         views.doc_request_update_lokasi_pelaksana,
         name="doc_request_update_lokasi_pelaksana",
     ),
+    path("requests/export/perintah-kerja/", views.doc_request_export_perintah_kerja, name="doc_request_export_perintah_kerja"),
+    path("requests/assignment/<int:assignment_pk>/perintah-kerja/", views.doc_request_update_perintah_kerja, name="doc_request_update_perintah_kerja"),
 
     # Maintenance & Troubleshoot LED
     path("maintenance/", views.maint_request_list, name="maint_request_list"),

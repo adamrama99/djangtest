@@ -178,6 +178,7 @@ class DocumentationRequestLokasiAssignment(models.Model):
         related_name="doc_request_lokasi_assignments",
         verbose_name="Pelaksana Dokumentasi",
     )
+    perintah_kerja = models.TextField("Perintah Kerja", blank=True, default="")
 
     class Meta:
         unique_together = ("documentation_request", "lokasi")

@@ -8,12 +8,47 @@
         <h3 class="mb-0">Documentation Requests</h3>
         <p class="text-muted mb-0 small">Manage photo and video documentation requests</p>
     </div>
-    {% if can_create_requests %}
-    <a href="{% url 'doc_request_create' %}" class="btn btn-primary">
-        <i class="bi bi-plus-lg me-1"></i> New Request
-    </a>
-    {% endif %}
+    <div class="d-flex gap-2">
+        {% if is_staff_role or is_admin %}
+        <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#exportModal">
+            <i class="bi bi-file-earmark-image me-1"></i> Export Perintah Kerja
+        </button>
+        {% endif %}
+        {% if can_create_requests %}
+        <a href="{% url 'doc_request_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i> New Request
+        </a>
+        {% endif %}
+    </div>
 </div>
+
+{% if is_staff_role or is_admin %}
+<div class="modal fade" id="exportModal" tabindex="-1" aria-labelledby="exportModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exportModalLabel">
+                    <i class="bi bi-file-earmark-image me-2"></i>Export Perintah Kerja
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">Pilih tanggal untuk export semua documentation request, dikelompokkan berdasarkan pelaksana/executor.</p>
+                <div class="mb-3">
+                    <label for="export-date" class="form-label fw-semibold">Tanggal</label>
+                    <input type="date" class="form-control" id="export-date" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-info" id="btn-open-export">
+                    <i class="bi bi-box-arrow-up-right me-1"></i> Buka Preview & Download
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <div class="card card-primary card-outline">
     <div class="card-header">
@@ -254,6 +289,36 @@
 
 {% if can_manage_pelaksana %}
 <form style="display:none">{% csrf_token %}</form>
+{% endif %}
+
+{% if is_staff_role or is_admin %}
+<script>
+  (function() {
+    const dateInput = document.getElementById('export-date');
+    if (dateInput) {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      dateInput.value = yyyy + '-' + mm + '-' + dd;
+    }
+
+    const btnExport = document.getElementById('btn-open-export');
+    if (btnExport) {
+      btnExport.addEventListener('click', function() {
+        const date = dateInput.value;
+        if (!date) {
+          alert('Pilih tanggal terlebih dahulu.');
+          return;
+        }
+        const url = "{% url 'doc_request_export_perintah_kerja' %}?date=" + date;
+        window.open(url, '_blank');
+        const modal = bootstrap.Modal.getInstance(document.getElementById('exportModal'));
+        if (modal) modal.hide();
+      });
+    }
+  })();
+</script>
 {% endif %}
 
 {% endblock %}

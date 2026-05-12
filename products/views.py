@@ -791,6 +791,106 @@ def doc_request_list(request):
     })
 
 
+@staff_or_admin_required
+def doc_request_export_perintah_kerja(request):
+    from datetime import datetime as _dt
+    from collections import OrderedDict
+
+    date_str = request.GET.get("date", "")
+    try:
+        export_date = _dt.strptime(date_str, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        export_date = timezone.localdate()
+
+    doc_requests = (
+        DocumentationRequest.objects.filter(tanggal=export_date)
+        .select_related("brand", "jenis_led")
+        .prefetch_related(
+            "lokasi",
+            "materi_items",
+            "requirements",
+            "jenis_kamera",
+            "lokasi_assignments__lokasi",
+            "lokasi_assignments__pelaksana",
+        )
+        .order_by("id")
+    )
+
+    grouped = OrderedDict()
+    unassigned_items = []
+
+    for doc_req in doc_requests:
+        assignments = list(doc_req.lokasi_assignments.all())
+        if not assignments:
+            unassigned_items.append({
+                "doc_req": doc_req,
+                "assignment_id": None,
+                "lokasi_name": doc_req.lokasi_display(),
+                "brand": doc_req.brand.name if doc_req.brand else "-",
+                "materi": doc_req.materi_display(),
+                "perintah_kerja": "",
+                "jenis_led": doc_req.jenis_led.name if doc_req.jenis_led else "-",
+                "note": doc_req.note or "-",
+                "requirements": _joined_names(doc_req.requirements, empty_label="-"),
+                "jenis_kamera": _joined_names(doc_req.jenis_kamera, empty_label="-"),
+            })
+            continue
+
+        for assignment in assignments:
+            pelaksana_list = list(assignment.pelaksana.all())
+            lokasi_name = assignment.lokasi.name if assignment.lokasi else "-"
+
+            item = {
+                "doc_req": doc_req,
+                "assignment_id": assignment.id,
+                "lokasi_name": lokasi_name,
+                "brand": doc_req.brand.name if doc_req.brand else "-",
+                "materi": doc_req.materi_display(),
+                "perintah_kerja": assignment.perintah_kerja or "",
+                "jenis_led": doc_req.jenis_led.name if doc_req.jenis_led else "-",
+                "note": doc_req.note or "-",
+                "requirements": _joined_names(doc_req.requirements, empty_label="-"),
+                "jenis_kamera": _joined_names(doc_req.jenis_kamera, empty_label="-"),
+            }
+
+            if not pelaksana_list:
+                unassigned_items.append(item)
+            else:
+                for pelaksana in pelaksana_list:
+                    key = pelaksana.name
+                    if key not in grouped:
+                        grouped[key] = []
+                    grouped[key].append(item)
+
+    sorted_grouped = OrderedDict(sorted(grouped.items(), key=lambda x: x[0].casefold()))
+
+    if unassigned_items:
+        sorted_grouped["Belum Ditentukan"] = unassigned_items
+
+    return render(request, "products/doc_request_export_preview.html", {
+        "export_date": export_date,
+        "grouped": sorted_grouped,
+        "total_requests": doc_requests.count(),
+    })
+
+
+@staff_or_admin_required
+def doc_request_update_perintah_kerja(request, assignment_pk):
+    if request.method != "POST" or not _is_ajax(request):
+        return JsonResponse({"success": False}, status=400)
+
+    assignment = get_object_or_404(DocumentationRequestLokasiAssignment, pk=assignment_pk)
+    import json as _json
+    try:
+        body = _json.loads(request.body)
+    except (ValueError, TypeError):
+        return JsonResponse({"success": False}, status=400)
+
+    assignment.perintah_kerja = body.get("perintah_kerja", "")
+    assignment.save(update_fields=["perintah_kerja"])
+    return JsonResponse({"success": True})
+
+
 @requester_or_admin_required
 def doc_request_create(request):
     form = DocumentationRequestForm(request.POST or None)
