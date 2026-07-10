@@ -168,7 +168,7 @@
                     </button>
                 </form>
                 {% endif %}
-                {% if is_admin %}
+                {% if can_delete_request %}
                 <a href="{% url 'doc_request_delete' request.id %}" class="btn btn-outline-danger">
                     <i class="bi bi-trash-fill me-1"></i>Delete Request
                 </a>

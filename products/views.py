@@ -494,7 +494,7 @@ def _filter_doc_requests_for_user(queryset, user):
         if not dokumentator_ids:
             return queryset.none()
         return queryset.filter(lokasi_assignments__pelaksana__in=dokumentator_ids).distinct()
-    return queryset.filter(submitted_by=user)
+    return queryset
 
 
 def _filter_maint_requests_for_user(queryset, user):
@@ -505,7 +505,7 @@ def _filter_maint_requests_for_user(queryset, user):
         if not dokumentator_ids:
             return queryset.none()
         return queryset.filter(pelaksana__in=dokumentator_ids).distinct()
-    return queryset.filter(submitted_by=user)
+    return queryset
 
 
 def _executor_done_toggle_context(request, queryset):
@@ -530,10 +530,11 @@ def _executor_done_toggle_context(request, queryset):
 def _can_edit_request_record(user, submitted_by):
     if not _can_access_request_edit(user):
         return False
-    if _is_admin(user) or _is_staff_role(user):
-        return True
-    submitted_by_id = submitted_by.pk if hasattr(submitted_by, "pk") else submitted_by
-    return submitted_by_id == user.id
+    return True
+
+
+def _can_delete_request_record(user, request_obj):
+    return _is_admin(user) or _is_staff_role(user) or _is_requester(user)
 
 
 def _format_datetime_for_history(value):
@@ -781,6 +782,7 @@ def doc_request_list(request):
         "all_dokumentators": _assignable_dokumentators_queryset(),
         "can_create_requests": _is_requester(request.user) or _is_admin(request.user),
         "can_edit_requests": _can_access_request_edit(request.user),
+        "can_delete_requests": _can_delete_request_record(request.user, None),
         "is_admin": _is_admin(request.user),
         "is_staff_role": _is_staff_role(request.user),
         "is_executor": _is_executor(request.user),
@@ -1077,13 +1079,16 @@ def doc_request_detail(request, pk):
         "proof_error": proof_error,
         "can_upload_proof": can_upload_proof,
         "can_edit_request": _can_edit_request_record(request.user, doc_request.submitted_by),
+        "can_delete_request": _can_delete_request_record(request.user, doc_request),
         "is_admin": _is_admin(request.user),
     })
 
 
-@admin_required
 def doc_request_delete(request, pk):
     doc_request = get_object_or_404(DocumentationRequest, pk=pk)
+    if not _can_delete_request_record(request.user, doc_request):
+        return _forbidden_response(request, "Anda tidak memiliki izin untuk menghapus request ini.")
+
     if request.method == "POST":
         label = _doc_request_label(doc_request)
         _create_edit_history(
@@ -1613,6 +1618,7 @@ def maint_request_list(request):
         "all_dokumentators": _assignable_dokumentators_queryset(),
         "can_create_requests": _is_requester(request.user) or _is_admin(request.user),
         "can_edit_requests": _can_access_request_edit(request.user),
+        "can_delete_requests": _can_delete_request_record(request.user, None),
         "is_admin": _is_admin(request.user),
         "is_staff_role": _is_staff_role(request.user),
         "is_executor": _is_executor(request.user),
@@ -1743,13 +1749,16 @@ def maint_request_detail(request, pk):
         "proof_error": proof_error,
         "can_upload_proof": can_upload_proof,
         "can_edit_request": _can_edit_request_record(request.user, maint_request.submitted_by),
+        "can_delete_request": _can_delete_request_record(request.user, maint_request),
         "is_admin": _is_admin(request.user),
     })
 
 
-@admin_required
 def maint_request_delete(request, pk):
     maint_request = get_object_or_404(MaintenanceRequest, pk=pk)
+    if not _can_delete_request_record(request.user, maint_request):
+        return _forbidden_response(request, "Anda tidak memiliki izin untuk menghapus request ini.")
+
     if request.method == "POST":
         maint_request.delete()
         return redirect("maint_request_list")
@@ -1818,6 +1827,7 @@ def jadwal_tayang_list(request):
     return render(request, "products/jadwal_tayang_list.html", {
         "requests": requests,
         "all_dokumentators": _assignable_dokumentators_queryset(),
+        "can_delete_requests": _can_delete_request_record(request.user, None),
         "is_requester": _is_requester(request.user),
         "is_executor": _is_executor(request.user),
         "is_admin": _is_admin(request.user),
@@ -1975,16 +1985,19 @@ def jadwal_tayang_detail(request, pk):
         "jt": jt,
         "is_requester": _is_requester(request.user),
         "is_executor": _is_executor(request.user),
+        "can_delete_request": _can_delete_request_record(request.user, jt),
         "is_admin": _is_admin(request.user),
     })
 
 
-@admin_required
 def jadwal_tayang_delete(request, pk):
     jt = get_object_or_404(
         JadwalTayang.objects.select_related("brand").prefetch_related("lokasi"),
         pk=pk,
     )
+    if not _can_delete_request_record(request.user, jt):
+        return _forbidden_response(request, "Anda tidak memiliki izin untuk menghapus jadwal tayang ini.")
+
     if request.method == "POST":
         label = _jadwal_tayang_label(jt)
         _create_edit_history(
